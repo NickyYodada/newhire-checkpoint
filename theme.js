@@ -1,19 +1,65 @@
-/* theme.js 【鎖定檔，禁止修改】：套用 DaisyUI 主題（深淺色＋16 套配色）、提供頁首外觀設定按鈕，並依 config.js 負責登入、管理面板與啟動流程。 */
+/* theme.js 【鎖定檔，禁止修改】：套用 DaisyUI 主題（深淺色＋20 套配色）、內建中英語言切換（ctx.I18n）、提供頁首外觀設定按鈕，並依 config.js 負責登入、管理面板與啟動流程。 */
 (function () {
   'use strict';
   var cfg = window.APP_CONFIG;
   var KEY = 'mws:' + cfg.appId + ':ui:appearance';
+  var LANG_KEY = 'mws:' + cfg.appId + ':ui:lang';
   var LIGHT_THEMES = [
-    ['light', '預設亮色', '#570df8'], ['cupcake', '粉彩圓潤', '#65c3c8'], ['emerald', '翡翠綠', '#66cc8a'], ['winter', '冬日藍', '#047aff'],
-    ['nord', '北歐藍', '#5e81ac'], ['pastel', '柔和紫', '#d1c1d7'], ['fantasy', '幻想紫', '#6e0b75'], ['valentine', '玫瑰粉', '#e96d7b'],
-    ['garden', '花園綠', '#5c7f67'], ['autumn', '秋楓紅', '#8c0327'], ['corporate', '商務藍', '#4b6bfb'], ['lofi', '極簡黑白', '#0d0d0d']
+    ['light', '預設亮色', '#570df8', 'Default Light'], ['cupcake', '粉彩圓潤', '#65c3c8', 'Cupcake'], ['emerald', '翡翠綠', '#66cc8a', 'Emerald'], ['winter', '冬日藍', '#047aff', 'Winter'],
+    ['nord', '北歐藍', '#5e81ac', 'Nord'], ['pastel', '柔和紫', '#d1c1d7', 'Pastel'], ['fantasy', '幻想紫', '#6e0b75', 'Fantasy'], ['valentine', '玫瑰粉', '#e96d7b', 'Valentine'],
+    ['garden', '花園綠', '#5c7f67', 'Garden'], ['autumn', '秋楓紅', '#8c0327', 'Autumn'], ['corporate', '商務藍', '#4b6bfb', 'Corporate'], ['lofi', '極簡黑白', '#0d0d0d', 'Lo-Fi']
   ];
   var DARK_THEMES = [
-    ['dark', '預設深色', '#793ef9'], ['night', '夜幕藍', '#38bdf8'], ['dracula', '德古拉紫', '#ff79c6'], ['sunset', '日落橘', '#ff865b'],
-    ['dim', '柔和深灰', '#9fe88d'], ['business', '商務深色', '#1c4ed8'], ['forest', '森林綠', '#1eb854'], ['coffee', '咖啡棕', '#db924b']
+    ['dark', '預設深色', '#793ef9', 'Default Dark'], ['night', '夜幕藍', '#38bdf8', 'Night'], ['dracula', '德古拉紫', '#ff79c6', 'Dracula'], ['sunset', '日落橘', '#ff865b', 'Sunset'],
+    ['dim', '柔和深灰', '#9fe88d', 'Dim'], ['business', '商務深色', '#1c4ed8', 'Business'], ['forest', '森林綠', '#1eb854', 'Forest'], ['coffee', '咖啡棕', '#db924b', 'Coffee']
   ];
   var ALL_THEMES = LIGHT_THEMES.concat(DARK_THEMES);
   var DARK_SET = new Set(DARK_THEMES.map(function (t) { return t[0]; }));
+
+  // 內建中／英語言切換（I18n）
+  var lang = 'zh';
+  try {
+    var savedLang = localStorage.getItem(LANG_KEY);
+    if (savedLang === 'en' || savedLang === 'zh') lang = savedLang;
+  } catch (e) { /* 略過 */ }
+  document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-Hant');
+
+  var langSubs = new Set();
+  function translateDom(rootEl) {
+    var scope = rootEl || document;
+    var isEn = lang === 'en';
+    scope.querySelectorAll('[data-i18n-zh],[data-i18n-en]').forEach(function (el) {
+      var v = el.getAttribute(isEn ? 'data-i18n-en' : 'data-i18n-zh');
+      if (v != null) el.textContent = v;
+    });
+    scope.querySelectorAll('[data-i18n-placeholder-zh],[data-i18n-placeholder-en]').forEach(function (el) {
+      var v = el.getAttribute(isEn ? 'data-i18n-placeholder-en' : 'data-i18n-placeholder-zh');
+      if (v != null) el.setAttribute('placeholder', v);
+    });
+    scope.querySelectorAll('[data-i18n-title-zh],[data-i18n-title-en]').forEach(function (el) {
+      var v = el.getAttribute(isEn ? 'data-i18n-title-en' : 'data-i18n-title-zh');
+      if (v != null) { el.setAttribute('title', v); el.setAttribute('aria-label', v); }
+    });
+  }
+  function setLang(next) {
+    lang = next === 'en' ? 'en' : 'zh';
+    document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-Hant');
+    try { localStorage.setItem(LANG_KEY, lang); } catch (e) { /* 略過 */ }
+    translateDom(document);
+    Array.from(langSubs).forEach(function (fn) { try { fn(lang); } catch (e) { console.error(e); } });
+  }
+  var I18n = {
+    get lang() { return lang; },
+    t: function (zhText, enText) { return lang === 'en' && enText !== undefined ? enText : zhText; },
+    setLang: setLang,
+    toggle: function () { setLang(lang === 'en' ? 'zh' : 'en'); },
+    apply: translateDom,
+    onChange: function (fn) {
+      if (typeof fn === 'function') langSubs.add(fn);
+      return function () { langSubs.delete(fn); };
+    }
+  };
+  window.I18n = I18n;
 
   var sysDark = matchMedia('(prefers-color-scheme: dark)').matches;
   var pref = { theme: sysDark ? 'dark' : 'light', lastLight: 'light', lastDark: 'dark' };
@@ -159,72 +205,116 @@
       var g = h('div', { class: 'grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 mb-4' });
       list.forEach(function (t) {
         var dot = h('span', { class: 'inline-block w-3 h-3 rounded-full shrink-0', style: 'background:' + t[2] });
-        var b = h('button', { type: 'button', 'data-theme-choice': t[0], onclick: function () { applyTheme(t[0]); paint(); } }, dot, t[1]);
+        var labelSpan = h('span', { 'data-i18n-zh': t[1], 'data-i18n-en': t[3] || t[1], text: I18n.t(t[1], t[3] || t[1]) });
+        var b = h('button', { type: 'button', 'data-theme-choice': t[0], onclick: function () { applyTheme(t[0]); paint(); } }, dot, labelSpan);
         buttons.push(b);
         g.appendChild(b);
       });
       return g;
     }
 
-    var modeBtn = h('button', { type: 'button', class: 'btn btn-ghost btn-sm btn-square', 'aria-label': '切換深色／淺色', title: '切換深色／淺色', onclick: function () {
-      applyTheme(DARK_SET.has(pref.theme) ? pref.lastLight : pref.lastDark);
-      paint();
-    } }, icon('circle-half-stroke'));
-    var gearBtn = h('button', { type: 'button', class: 'btn btn-ghost btn-sm btn-square', 'aria-label': '外觀設定', title: '外觀設定', onclick: function () { dialog.showModal(); } }, icon('gear'));
+    var langBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm px-2 font-medium text-xs gap-1',
+      'data-i18n-title-zh': '切換語言 (中 / EN)',
+      'data-i18n-title-en': 'Switch Language (中 / EN)',
+      onclick: function () { I18n.toggle(); }
+    }, icon('globe'), h('span', { 'data-i18n-zh': 'EN', 'data-i18n-en': '中文', text: I18n.t('EN', '中文') }));
+
+    var modeBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm btn-square',
+      'data-i18n-title-zh': '切換深色／淺色',
+      'data-i18n-title-en': 'Toggle Dark / Light Mode',
+      onclick: function () {
+        applyTheme(DARK_SET.has(pref.theme) ? pref.lastLight : pref.lastDark);
+        paint();
+      }
+    }, icon('circle-half-stroke'));
+    var gearBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm btn-square',
+      'data-i18n-title-zh': '外觀設定',
+      'data-i18n-title-en': 'Appearance Settings',
+      onclick: function () { dialog.showModal(); }
+    }, icon('gear'));
 
     var dialog = h('dialog', { class: 'modal' },
       h('div', { class: 'modal-box max-w-lg' },
-        h('h3', { class: 'text-lg font-semibold flex items-center gap-2 mb-3' }, icon('palette'), '外觀設定'),
-        h('div', { class: 'text-xs font-medium text-base-content/70' }, '淺色主題'),
+        h('h3', { class: 'text-lg font-semibold flex items-center gap-2 mb-3' }, icon('palette'), h('span', { 'data-i18n-zh': '外觀設定', 'data-i18n-en': 'Appearance' })),
+        h('div', { class: 'text-xs font-medium text-base-content/70', 'data-i18n-zh': '淺色主題', 'data-i18n-en': 'Light Themes' }),
         makeGrid(LIGHT_THEMES),
-        h('div', { class: 'text-xs font-medium text-base-content/70' }, '深色主題'),
+        h('div', { class: 'text-xs font-medium text-base-content/70', 'data-i18n-zh': '深色主題', 'data-i18n-en': 'Dark Themes' }),
         makeGrid(DARK_THEMES),
-        h('div', { class: 'modal-action' }, h('button', { type: 'button', class: 'btn btn-ghost', text: '關閉', onclick: function () { dialog.close(); } }))),
-      h('form', { method: 'dialog', class: 'modal-backdrop' }, h('button', { 'aria-label': '關閉', text: '關閉' })));
+        h('div', { class: 'modal-action' }, h('button', { type: 'button', class: 'btn btn-ghost', 'data-i18n-zh': '關閉', 'data-i18n-en': 'Close', onclick: function () { dialog.close(); } }))),
+      h('form', { method: 'dialog', class: 'modal-backdrop' }, h('button', { 'data-i18n-title-zh': '關閉', 'data-i18n-title-en': 'Close', text: '關閉' })));
     paint();
 
     var bar = $('mwsTheme');
-    if (bar) { bar.appendChild(modeBtn); bar.appendChild(gearBtn); }
+    if (bar) { bar.appendChild(langBtn); bar.appendChild(modeBtn); bar.appendChild(gearBtn); }
     document.body.appendChild(dialog);
+    translateDom(document);
 
     var appRoot = $('appRoot');
     if (cfg.syncMode === 'local') {
       var localbar = $('localbar'), fatalBox = $('fatal');
+      if (localbar) {
+        localbar.setAttribute('data-i18n-zh', '本機模式：資料只存在這個瀏覽器，清除瀏覽資料或換裝置就會消失');
+        localbar.setAttribute('data-i18n-en', 'Local mode: Data is stored only in this browser and will be lost if cleared or on another device.');
+      }
       function localFatal(err) {
         if (appRoot) appRoot.hidden = true;
         if (localbar) localbar.hidden = true;
-        if (fatalBox) { fatalBox.hidden = false; fatalBox.textContent = '發生錯誤：' + (err && err.message ? err.message : err); }
+        if (fatalBox) { fatalBox.hidden = false; fatalBox.textContent = I18n.t('發生錯誤：', 'Error: ') + (err && err.message ? err.message : err); }
       }
       try { window.Sync = makeLocalSync(); } catch (e) { localFatal(e); return; }
       loadScripts(cfg.scripts).then(function () {
         if (localbar) localbar.hidden = false;
+        translateDom(document);
         window.App.mount(appRoot, {
-          session: { uid: 'local', key: null, name: '本機使用者', role: 'admin', email: null },
-          Sync: window.Sync, cfg: cfg, canWrite: true
+          session: { uid: 'local', key: null, name: I18n.t('本機使用者', 'Local User'), role: 'admin', email: null },
+          Sync: window.Sync, cfg: cfg, canWrite: true, I18n: I18n
         });
       }).catch(localFatal);
       return;
     }
 
-    var ROLE_LABEL = { admin: '管理員', editor: '編輯者', viewer: '檢視者' };
+    var ROLE_LABEL = { admin: ['管理員', 'Admin'], editor: ['編輯者', 'Editor'], viewer: ['檢視者', 'Viewer'] };
     var gate = $('gate'), gateMsg = $('gateMsg'), gateClose = $('gateClose'), authRoot = $('authRoot');
     var userbar = $('userbar'), adminOverlay = $('adminOverlay'), adminRoot = $('adminRoot');
     var adminMounted = false;
+    var activeSession = null;
+    var activeCtx = null;
 
-    if (gateClose) gateClose.addEventListener('click', function () { gate.hidden = true; appRoot.hidden = false; });
-    if ($('adminClose')) $('adminClose').addEventListener('click', function () { adminOverlay.close(); });
+    var gateTitle = gate ? gate.querySelector('.card-title') : null;
+    if (gateTitle) { gateTitle.setAttribute('data-i18n-zh', '登入'); gateTitle.setAttribute('data-i18n-en', 'Sign In'); }
+    if (gateClose) {
+      gateClose.setAttribute('data-i18n-zh', '返回');
+      gateClose.setAttribute('data-i18n-en', 'Back');
+      gateClose.addEventListener('click', function () { gate.hidden = true; appRoot.hidden = false; });
+    }
+    var adminTitle = adminOverlay ? adminOverlay.querySelector('h3') : null;
+    if (adminTitle) { adminTitle.setAttribute('data-i18n-zh', '成員管理'); adminTitle.setAttribute('data-i18n-en', 'Member Management'); }
+    if ($('adminClose')) {
+      $('adminClose').setAttribute('data-i18n-zh', '關閉');
+      $('adminClose').setAttribute('data-i18n-en', 'Close');
+      $('adminClose').addEventListener('click', function () { adminOverlay.close(); });
+    }
+    translateDom(document);
 
     function fatal(err) {
       gate.hidden = false;
       appRoot.hidden = true;
-      gateMsg.textContent = err && err.kind === 'network' ? '無法連線，請檢查網路後重試。' : '發生錯誤：' + (err && err.message ? err.message : err);
+      gateMsg.textContent = err && err.kind === 'network'
+        ? I18n.t('無法連線，請檢查網路後重試。', 'Network error. Please check your connection and try again.')
+        : I18n.t('發生錯誤：', 'Error: ') + (err && err.message ? err.message : err);
       authRoot.textContent = '';
-      authRoot.appendChild(h('button', { type: 'button', class: 'btn btn-primary', text: '重試', onclick: function () { location.reload(); } }));
+      authRoot.appendChild(h('button', { type: 'button', class: 'btn btn-primary', 'data-i18n-zh': '重試', 'data-i18n-en': 'Retry', text: I18n.t('重試', 'Retry'), onclick: function () { location.reload(); } }));
     }
 
     function showLogin(closable) {
       var Auth = window.Auth;
-      gateMsg.textContent = Auth.notice || '請先登入';
+      gateMsg.textContent = Auth.notice || I18n.t('請先登入', 'Please sign in');
       gate.hidden = false;
       appRoot.hidden = true;
       gateClose.hidden = !closable;
@@ -237,32 +327,41 @@
       userbar.hidden = false;
       var Auth = window.Auth;
       if (session) {
-        userbar.appendChild(h('span', { class: 'text-sm text-base-content/70', text: session.name + '（' + (ROLE_LABEL[session.role] || session.role) + '）' }));
+        var rPair = ROLE_LABEL[session.role] || [session.role, session.role];
+        var rText = I18n.t(rPair[0], rPair[1]);
+        userbar.appendChild(h('span', { class: 'text-sm text-base-content/70', text: session.name + I18n.t('（' + rText + '）', ' (' + rText + ')') }));
         if (session.role === 'admin' && window.Admin) {
-          userbar.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '管理', onclick: function () {
+          userbar.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', 'data-i18n-zh': '管理', 'data-i18n-en': 'Manage', text: I18n.t('管理', 'Manage'), onclick: function () {
             if (!adminMounted) { adminMounted = true; window.Admin.mount(adminRoot, ctx); }
             adminOverlay.showModal();
           } }));
         }
-        userbar.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '登出', onclick: function () {
+        userbar.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', 'data-i18n-zh': '登出', 'data-i18n-en': 'Sign Out', text: I18n.t('登出', 'Sign Out'), onclick: function () {
           Promise.resolve(Auth.signOut()).then(function () { location.reload(); });
         } }));
       } else {
         if (Auth.notice) userbar.appendChild(h('span', { class: 'text-sm text-error', text: Auth.notice }));
-        userbar.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '登入', onclick: function () { showLogin(true); } }));
+        userbar.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', 'data-i18n-zh': '登入', 'data-i18n-en': 'Sign In', text: I18n.t('登入', 'Sign In'), onclick: function () { showLogin(true); } }));
       }
     }
+
+    I18n.onChange(function () {
+      if (activeCtx && cfg.authMode !== 'none') renderUserbar(activeSession, activeCtx);
+    });
 
     function start(session) {
       var hasAuth = cfg.authMode !== 'none';
       var role = session ? session.role : null;
       var ctx = {
-        session: session, Sync: window.Sync, cfg: cfg,
+        session: session, Sync: window.Sync, cfg: cfg, I18n: I18n,
         canWrite: hasAuth ? (role === 'admin' || role === 'editor') : !!cfg.publicWrite
       };
+      activeSession = session;
+      activeCtx = ctx;
       gate.hidden = true;
       appRoot.hidden = false;
       if (hasAuth) renderUserbar(session, ctx);
+      translateDom(appRoot);
       window.App.mount(appRoot, ctx);
     }
 

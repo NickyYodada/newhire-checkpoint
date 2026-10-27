@@ -12,17 +12,16 @@
   var UI_PREF_HIRE = 'mws:newhire-checkpoint-app:ui:selectedHire';
 
   var EVAL_META = {
-    on_track: { label: '符合預期 (On Track)', badge: 'badge-success', icon: 'fa-circle-check' },
-    ahead: { label: '進度超前 (Ahead)', badge: 'badge-info', icon: 'fa-rocket' },
-    attention: { label: '需加強關注 (Needs Attention)', badge: 'badge-warning', icon: 'fa-triangle-exclamation' },
-    behind: { label: '進度落後 (Behind)', badge: 'badge-error', icon: 'fa-circle-exclamation' }
+    on_track: { labelZh: '符合預期 (On Track)', labelEn: 'On Track', badge: 'badge-success', icon: 'fa-circle-check' },
+    ahead: { labelZh: '進度超前 (Ahead)', labelEn: 'Ahead', badge: 'badge-info', icon: 'fa-rocket' },
+    attention: { labelZh: '需加強關注 (Needs Attention)', labelEn: 'Needs Attention', badge: 'badge-warning', icon: 'fa-triangle-exclamation' },
+    behind: { labelZh: '進度落後 (Behind)', labelEn: 'Behind', badge: 'badge-error', icon: 'fa-circle-exclamation' }
   };
 
   var TASK_STATUS_META = {
     pending: { label: '⏳ Pending', badge: 'badge-warning badge-soft', next: 'completed', isDone: false },
     completed: { label: '✅ Completed', badge: 'badge-success badge-soft', next: 'pending', isDone: true },
     final_eval: { label: '🏁 Final Evaluation', badge: 'badge-primary badge-soft', next: 'completed', isDone: false },
-    // 相容舊狀態值
     todo: { label: '⏳ Pending', badge: 'badge-warning badge-soft', next: 'completed', isDone: false },
     in_progress: { label: '⏳ Pending', badge: 'badge-warning badge-soft', next: 'completed', isDone: false },
     done: { label: '✅ Completed', badge: 'badge-success badge-soft', next: 'pending', isDone: true }
@@ -55,15 +54,20 @@
     mount: function (root, ctx) {
       var $ = function (id) { return root.querySelector('#' + id); };
       var sync = ctx.Sync;
+      var i18n = ctx.I18n || { lang: 'zh', t: function (z) { return z; }, onChange: function () {} };
       var canWrite = !!ctx.canWrite;
+      var curSyncStatus = 'loading';
 
-      var STATUS_LABELS = {
-        loading: '載入中…',
-        live: '已同步',
-        offline: '離線，重連中…',
-        denied: '無讀取權限',
-        auth: '登入已失效'
-      };
+      function getStatusLabel(s) {
+        var map = {
+          loading: i18n.t('載入中…', 'Loading…'),
+          live: i18n.t('已同步', 'Synced'),
+          offline: i18n.t('離線，重連中…', 'Offline, reconnecting…'),
+          denied: i18n.t('無讀取權限', 'Permission denied'),
+          auth: i18n.t('登入已失效', 'Session expired')
+        };
+        return map[s] || s;
+      }
 
       var hiresMap = {};
       var tasksMap = {};
@@ -151,7 +155,7 @@
       function showErr(e) {
         errEl.hidden = false;
         errEl.textContent = e && e.kind === 'denied'
-          ? '沒有權限執行這個動作（角色不足或存取已被撤銷）'
+          ? i18n.t('沒有權限執行這個動作（角色不足或存取已被撤銷）', 'Permission denied (insufficient role or access revoked)')
           : (e && e.message) || String(e);
       }
 
@@ -241,7 +245,7 @@
       function applyCurriculumTemplateToHire(hireId) {
         var tpls = getSortedTemplates();
         if (!tpls.length) {
-          showErr(new Error('目前資料庫中尚無預設課綱範本（/data/templates）'));
+          showErr(new Error(i18n.t('目前資料庫中尚無預設課綱範本（/data/templates）', 'No default curriculum template found in database (/data/templates)')));
           return Promise.resolve();
         }
         var now = Date.now();
@@ -272,7 +276,7 @@
         var meta = EVAL_META[statusKey] || EVAL_META.on_track;
         return h('span', { class: 'badge badge-sm gap-1 ' + meta.badge },
           h('i', { class: 'fa-solid ' + meta.icon, 'aria-hidden': 'true' }),
-          meta.label
+          i18n.t(meta.labelZh, meta.labelEn)
         );
       }
 
@@ -282,6 +286,7 @@
       }
 
       function renderAll() {
+        statusEl.textContent = getStatusLabel(curSyncStatus);
         var hireIds = getSortedHireIds();
         if (!selectedHireId || !hiresMap[selectedHireId]) {
           selectedHireId = hireIds[0] || '';
@@ -290,7 +295,7 @@
 
         hireSelect.textContent = '';
         if (!hireIds.length) {
-          hireSelect.appendChild(h('option', { value: '', text: '尚無新人資料' }));
+          hireSelect.appendChild(h('option', { value: '', text: i18n.t('尚無新人資料', 'No new hires yet') }));
           hireSelect.disabled = true;
           hireActions.hidden = true;
           hireSummary.hidden = true;
@@ -307,7 +312,7 @@
 
         hireIds.forEach(function (id) {
           var hr = hiresMap[id];
-          var label = (hr.name || '未命名') + (hr.mentor ? '（Mentor: ' + hr.mentor + '）' : '');
+          var label = (hr.name || i18n.t('未命名', 'Unnamed')) + (hr.mentor ? ' (Mentor: ' + hr.mentor + ')' : '');
           var opt = h('option', { value: id, text: label });
           if (id === selectedHireId) opt.selected = true;
           hireSelect.appendChild(opt);
@@ -320,15 +325,17 @@
 
         // 統計資訊
         infoHireName.textContent = currentHire.name || '-';
-        infoHireRole.textContent = currentHire.roleTitle || '未填寫部門職稱';
+        infoHireRole.textContent = currentHire.roleTitle || i18n.t('未填寫部門職稱', 'Role not specified');
         infoMentor.textContent = currentHire.mentor || '-';
-        infoStartDate.textContent = currentHire.startDate ? '到職日：' + currentHire.startDate : '未設定到職日';
+        infoStartDate.textContent = currentHire.startDate
+          ? (i18n.t('到職日：', 'Start: ') + currentHire.startDate)
+          : i18n.t('未設定到職日', 'Start date not set');
 
         var totalCount = allTasks.length;
         var doneCount = allTasks.filter(function (t) { return isTaskDone(t.data.status); }).length;
         var rate = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
         infoTaskRate.textContent = rate + '%';
-        infoTaskCount.textContent = doneCount + ' / ' + totalCount + ' 階段完成';
+        infoTaskCount.textContent = doneCount + ' / ' + totalCount + i18n.t(' 階段完成', ' stages done');
 
         var reviewedWeeks = Object.keys(reviewsByWeek).map(Number).sort(function (a, b) { return b - a; });
         infoLatestEval.textContent = '';
@@ -340,8 +347,8 @@
           var stageLabel = matchedStage ? matchedStage.shortLabel : ('Stage ' + latestW);
           infoLatestWeek.textContent = stageLabel + (latestRev.updatedBy ? ' · ' + latestRev.updatedBy : '');
         } else {
-          infoLatestEval.textContent = '尚未評估';
-          infoLatestWeek.textContent = '尚無評估紀錄';
+          infoLatestEval.textContent = i18n.t('尚未評估', 'Not evaluated');
+          infoLatestWeek.textContent = i18n.t('尚無評估紀錄', 'No checkpoint yet');
         }
 
         // 渲染上方篩選 Tabs（全部總覽 + 各階段）
@@ -354,7 +361,7 @@
             selectedFilter = 'all';
             renderAll();
           }
-        }, '全部階段總覽 (' + doneCount + '/' + totalCount + ')');
+        }, i18n.t('全部階段總覽', 'All Stages') + ' (' + doneCount + '/' + totalCount + ')');
         weekTabs.appendChild(allTabBtn);
 
         stages.forEach(function (stObj) {
@@ -407,14 +414,16 @@
           : allTasks.filter(function (t) { return Number(t.data.week) === Number(selectedFilter); });
 
         var doneTasks = filtered.filter(function (t) { return isTaskDone(t.data.status); });
-        weekProgressBadge.textContent = doneTasks.length + ' / ' + filtered.length + ' 完成';
+        weekProgressBadge.textContent = doneTasks.length + ' / ' + filtered.length + i18n.t(' 完成', ' Done');
 
         taskTableBody.textContent = '';
         if (!filtered.length) {
           tableWrap.hidden = true;
           emptyTaskState.hidden = false;
-          emptyTaskState.textContent = '目前尚無讀書計畫階段項目。' +
-            (canWrite ? '可點選上方「套用預設課綱範本」一鍵匯入 5 個階段課綱，或點選「新增讀書階段項目」自行新增！' : '');
+          emptyTaskState.textContent = i18n.t(
+            '目前尚無讀書計畫階段項目。' + (canWrite ? '可點選上方「套用預設課綱範本」一鍵匯入 5 個階段課綱，或點選「新增讀書階段項目」自行新增！' : ''),
+            'No study stages yet. ' + (canWrite ? 'Click "Apply Default Curriculum" above to import the 5 stages, or click "Add Study Stage".' : '')
+          );
           return;
         }
 
@@ -433,7 +442,7 @@
           var tdTimeline = h('td', { class: 'font-semibold text-xs whitespace-pre-line align-top' }, timelineText);
 
           // 2. Phase / Domain
-          var phaseText = t.phase || t.title || '未命名階段';
+          var phaseText = t.phase || t.title || i18n.t('未命名階段', 'Untitled Stage');
           var tdPhase = h('td', { class: 'font-semibold text-sm align-top' }, phaseText);
 
           // 3. Key Topics & Hands-on Tasks
@@ -455,7 +464,7 @@
                 class: 'link link-primary inline-flex items-center gap-1'
               },
                 h('i', { class: 'fa-solid fa-arrow-up-right-from-square', 'aria-hidden': 'true' }),
-                '開啟連結'
+                i18n.t('開啟連結', 'Open Link')
               )
             );
           }
@@ -472,7 +481,7 @@
           var statusBtn = h('button', {
             type: 'button',
             class: 'badge badge-sm whitespace-nowrap ' + stMeta.badge + (canWrite ? ' cursor-pointer hover:opacity-80' : ''),
-            title: canWrite ? '點擊快速切換完成狀態 (Completed / Pending)' : '',
+            title: canWrite ? i18n.t('點擊快速切換完成狀態 (Completed / Pending)', 'Click to toggle status (Completed / Pending)') : '',
             onclick: function () {
               if (!canWrite) return;
               run(sync.save(COL_TASKS, id, { status: stMeta.next, updatedAt: Date.now() }));
@@ -486,7 +495,7 @@
             var evalBtn = h('button', {
               type: 'button',
               class: 'btn btn-ghost btn-xs text-xs gap-1',
-              title: '點此查看下方 Mentor 評估',
+              title: i18n.t('點此查看下方 Mentor 評估', 'Click to view Mentor checkpoint below'),
               onclick: function () {
                 selectedReviewWeek = wk;
                 isEditingReview = false;
@@ -495,27 +504,29 @@
               }
             },
               h('i', { class: 'fa-solid ' + EVAL_META[wkRev.data.status].icon, 'aria-hidden': 'true' }),
-              'Mentor 已評'
+              i18n.t('Mentor 已評', 'Evaluated')
             );
             tdStatus.appendChild(h('div', {}, evalBtn));
           }
 
           if (canWrite) {
+            var editLbl = i18n.t('編輯階段項目', 'Edit Stage');
+            var delLbl = i18n.t('刪除階段項目', 'Delete Stage');
             var rowActions = h('div', { class: 'flex items-center justify-center gap-1 pt-0.5' },
               h('button', {
                 type: 'button',
                 class: 'btn btn-ghost btn-xs btn-square',
-                'aria-label': '編輯階段項目',
-                title: '編輯階段項目',
+                'aria-label': editLbl,
+                title: editLbl,
                 onclick: function () { openTaskModal(id, t); }
               }, h('i', { class: 'fa-regular fa-pen-to-square', 'aria-hidden': 'true' })),
               h('button', {
                 type: 'button',
                 class: 'btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-error',
-                'aria-label': '刪除階段項目',
-                title: '刪除階段項目',
+                'aria-label': delLbl,
+                title: delLbl,
                 onclick: function () {
-                  if (confirm('確定要刪除「' + phaseText + '」嗎？')) {
+                  if (confirm(i18n.t('確定要刪除「' + phaseText + '」嗎？', 'Delete stage "' + phaseText + '"?'))) {
                     run(sync.remove(COL_TASKS, id));
                   }
                 }
@@ -541,7 +552,10 @@
         if (!reviewEntry) {
           reviewDisplay.appendChild(
             h('div', { class: 'text-sm text-base-content/60 py-4 text-center bg-base-200/40 rounded-box' },
-              '「' + stageTitle + '」尚未填寫 Mentor 進度評估。' + (canWrite ? '請點選右方「填寫 / 更新本階段評估」進行記錄。' : '')
+              i18n.t(
+                '「' + stageTitle + '」尚未填寫 Mentor 進度評估。' + (canWrite ? '請點選右方「填寫 / 更新本階段評估」進行記錄。' : ''),
+                'No Mentor checkpoint recorded for "' + stageTitle + '" yet. ' + (canWrite ? 'Click "Write / Update Evaluation" on the right to add one.' : '')
+              )
             )
           );
           return;
@@ -552,24 +566,26 @@
 
         var grid = h('div', { class: 'grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1' },
           h('div', { class: 'p-3 rounded-box bg-base-200/50 space-y-1' },
-            h('div', { class: 'text-xs font-semibold text-base-content/60', text: 'Mentor 週評語與回饋 (Feedback & Action Items)' }),
-            h('div', { class: 'text-sm whitespace-pre-wrap', text: rev.mentorComment || '（無評語）' })
+            h('div', { class: 'text-xs font-semibold text-base-content/60', text: i18n.t('Mentor 週評語與回饋 (Feedback & Action Items)', 'Mentor Feedback & Action Items') }),
+            h('div', { class: 'text-sm whitespace-pre-wrap', text: rev.mentorComment || i18n.t('（無評語）', '(No comments)') })
           ),
           h('div', { class: 'p-3 rounded-box bg-base-200/50 space-y-1' },
-            h('div', { class: 'text-xs font-semibold text-base-content/60', text: '新人本階段心得與提問 (New Hire Reflection)' }),
-            h('div', { class: 'text-sm whitespace-pre-wrap', text: rev.traineeSummary || '（尚無填寫心得）' })
+            h('div', { class: 'text-xs font-semibold text-base-content/60', text: i18n.t('新人本階段心得與提問 (New Hire Reflection)', 'New Hire Reflection & Questions') }),
+            h('div', { class: 'text-sm whitespace-pre-wrap', text: rev.traineeSummary || i18n.t('（尚無填寫心得）', '(No reflection yet)') })
           )
         );
         reviewDisplay.appendChild(grid);
 
-        var footerText = '評估人：' + (rev.mentorName || currentHire.mentor || '-') +
-          (rev.updatedAt ? ' · 更新時間：' + new Date(rev.updatedAt).toLocaleString('zh-TW') : '');
+        var footerText = i18n.t('評估人：', 'Reviewed by: ') + (rev.mentorName || currentHire.mentor || '-') +
+          (rev.updatedAt ? ' · ' + i18n.t('更新時間：', 'Updated: ') + new Date(rev.updatedAt).toLocaleString(i18n.lang === 'en' ? 'en-US' : 'zh-TW') : '');
         reviewDisplay.appendChild(h('div', { class: 'text-xs text-base-content/60 text-right pt-1', text: footerText }));
       }
 
       function openHireModal(hireId, hireData) {
         editingHireId = hireId || null;
-        hireModalTitle.textContent = editingHireId ? '編輯新人資料' : '新增新人';
+        hireModalTitle.textContent = editingHireId
+          ? i18n.t('編輯新人資料', 'Edit New Hire')
+          : i18n.t('新增新人', 'Add New Hire');
         hireNameInput.value = (hireData && hireData.name) || '';
         hireMentorInput.value = (hireData && hireData.mentor) || (ctx.session && ctx.session.name) || '';
         hireRoleInput.value = (hireData && hireData.roleTitle) || '';
@@ -581,7 +597,9 @@
 
       function openTaskModal(taskId, taskData) {
         editingTaskId = taskId || null;
-        taskModalTitle.textContent = editingTaskId ? '編輯讀書階段項目' : '新增讀書階段項目';
+        taskModalTitle.textContent = editingTaskId
+          ? i18n.t('編輯讀書階段項目', 'Edit Study Stage')
+          : i18n.t('新增讀書階段項目', 'Add Study Stage');
         var defaultWk = selectedFilter === 'all'
           ? (getHireTasks(selectedHireId).length + 1)
           : Number(selectedFilter);
@@ -608,8 +626,8 @@
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var existingCount = getHireTasks(selectedHireId).length;
           var msg = existingCount > 0
-            ? '此新人已有 ' + existingCount + ' 筆階段項目，確定要額外匯入預設的 5 階段課綱範本嗎？'
-            : '確定要為此新人匯入預設的 5 階段課綱範本嗎？';
+            ? i18n.t('此新人已有 ' + existingCount + ' 筆階段項目，確定要額外匯入預設的 5 階段課綱範本嗎？', 'This new hire already has ' + existingCount + ' stages. Import the default 5-stage curriculum anyway?')
+            : i18n.t('確定要為此新人匯入預設的 5 階段課綱範本嗎？', 'Import the default 5-stage curriculum template for this new hire?');
           if (!confirm(msg)) return;
           run(applyCurriculumTemplateToHire(selectedHireId));
         });
@@ -622,7 +640,7 @@
         deleteHireBtn.addEventListener('click', function () {
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var hr = hiresMap[selectedHireId];
-          if (!confirm('確定要刪除新人「' + (hr.name || '') + '」及其所有讀書計畫與評估紀錄嗎？')) return;
+          if (!confirm(i18n.t('確定要刪除新人「' + (hr.name || '') + '」及其所有讀書計畫與評估紀錄嗎？', 'Delete new hire "' + (hr.name || '') + '" and all their study stages and evaluations?'))) return;
           var targetHireId = selectedHireId;
           var promises = [sync.remove(COL_HIRES, targetHireId)];
           getHireTasks(targetHireId).forEach(function (t) {
@@ -781,10 +799,14 @@
         subTemplates.refresh();
       });
 
+      i18n.onChange(function () {
+        renderAll();
+      });
+
       var subHires = sync.subscribe(COL_HIRES, {
         onChange: function (map) { hiresMap = map || {}; renderAll(); },
         onError: showErr,
-        onStatus: function (s) { statusEl.textContent = STATUS_LABELS[s] || s; }
+        onStatus: function (s) { curSyncStatus = s; statusEl.textContent = getStatusLabel(s); }
       });
 
       var subTasks = sync.subscribe(COL_TASKS, {

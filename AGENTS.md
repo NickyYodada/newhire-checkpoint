@@ -29,10 +29,13 @@
 - **元件優先**：表單、按鈕、卡片、清單、表格、統計卡、分頁、對話框、徽章、通知等介面，**優先使用**已載入的 DaisyUI 5 元件類別（如 `btn`、`btn-primary`、`btn-soft`、`btn-ghost`、`card`、`card-body`、`input`、`select`、`textarea`、`checkbox`、`toggle`、`table`、`list`、`list-row`、`badge`、`alert`、`tabs`、`stat`、`modal`、`collapse`、`drawer`、`steps`…，官方文件：https://daisyui.com/components/）搭配 Tailwind 排版工具類別（`flex`、`grid`、`gap-*`、`space-y-*`、`p-*`）。遇到特殊結構時，可自由搭配標準 HTML／CSS。
 - **色票優先**：背景、文字、邊框與強調色**優先使用** DaisyUI 語意色類別或變數（如 `bg-base-100`、`bg-base-200`、`text-base-content`、`text-base-content/70`、`border-base-300`、`text-primary`、`bg-primary`、`badge-success`、`badge-warning`、`text-error` 或 `var(--color-primary)`、`var(--color-base-100)`），讓右上角的深淺色與 20 套主題自動生效，也不要自行實作第二套深色模式或主題切換器。若有特殊圖表色或使用者指定配色，可自訂顏色。
 - **圖示優先**：常規 UI 圖示**優先使用**已載入的 Font Awesome Free（`fa-solid`、`fa-regular`、`fa-brands`，例如 `<i class="fa-solid fa-plus" aria-hidden="true"></i>`；純圖示按鈕請加 `aria-label`）。若 Font Awesome 沒有合適圖示，或需要特殊視覺（如自繪 SVG 圖表／插圖、使用者明確想要 emoji），可彈性使用。
+- **中英雙語切換（必備）**：頁首已內建中／英語言切換按鈕並提供 `ctx.I18n`。開發畫面時：
+  1. `index.html` 的靜態文字請加上 `data-i18n-zh="..." data-i18n-en="..."`（輸入框提示用 `data-i18n-placeholder-zh`／`data-i18n-placeholder-en`；按鈕提示用 `data-i18n-title-zh`／`data-i18n-title-en`），`theme.js` 會在切換時自動替換。
+  2. `app.js` 動態繪製的介面字串一律使用 `ctx.I18n.t('中文', 'English')`，並以 `ctx.I18n.onChange(function (lang) { render(); })` 監聽語言切換重繪畫面，不可自行實作第二套語言切換器。
 
 **鎖定區（禁止修改、重寫、格式化，也不要「順手優化」）**
 - `index.html` 在 `#appRoot` 以外的所有外框標籤
-- `theme.js`、`base.css`：套用 DaisyUI 主題（深色／淺色與 20 套主題設定）、共用排版與啟動流程（`theme.js` 負責依 `config.js` 載入模組與掛載應用{{if:local}}，並內建本機模式的 `ctx.Sync`{{if:local}}）。DaisyUI 5.0.0、Tailwind CSS 4.0.0 與 Font Awesome Free 7.3.1 皆由 CDN 載入並鎖定版本。
+- `theme.js`、`base.css`：套用 DaisyUI 主題（深色／淺色與 20 套主題設定）、內建中／英語言切換（`ctx.I18n`）、共用排版與啟動流程（`theme.js` 負責依 `config.js` 載入模組與掛載應用{{if:local}}，並內建本機模式的 `ctx.Sync`{{if:local}}）。DaisyUI 5.0.0、Tailwind CSS 4.0.0 與 Font Awesome Free 7.3.1 皆由 CDN 載入並鎖定版本。
 - `adapter.js`：與資料庫、登入服務溝通的底層（REST）
 - `auth.js`：登入（Magic Link（邀請連結））
 - `admin.js`：成員管理面板
@@ -65,6 +68,11 @@
 - `ctx.session`：`{ uid, key, name, role, email }`；`role` 為 `admin`、`editor` 或 `viewer`。
 - `ctx.canWrite`：是否顯示編輯功能。只是 UI 提示，真正的權限由資料庫規則強制。
 - `ctx.cfg`：`config.js` 的內容（唯讀）。
+- `ctx.I18n`：內建中英語言切換器：
+  - `lang`：目前語言（`'zh'` 或 `'en'`）。
+  - `t(zhText, enText)`：依目前語言回傳對應字串。
+  - `apply(rootEl)`：掃描並套用 `data-i18n-zh`／`data-i18n-en` 等屬性。
+  - `onChange(fn)`：註冊語言變更回呼（切換時請重新渲染動態列表）。
 - `ctx.Sync`：資料層（`ctx.Sync.mode` = `on-demand`），見下。
 
 `ctx.Sync` 的方法：
