@@ -147,6 +147,7 @@
       var hireSelect = $('hireSelect');
       var hireActions = $('hireActions');
       var applyTemplateBtn = $('applyTemplateBtn');
+      var manageTemplateBtn = $('manageTemplateBtn');
       var editHireBtn = $('editHireBtn');
       var deleteHireBtn = $('deleteHireBtn');
       var hireSummary = $('hireSummary');
@@ -211,6 +212,24 @@
       var taskNoteInput = $('taskNoteInput');
       var taskModalCancel = $('taskModalCancel');
 
+      var tplListModal = $('tplListModal');
+      var saveCurrentAsTplBtn = $('saveCurrentAsTplBtn');
+      var addTplItemBtn = $('addTplItemBtn');
+      var tplTableBody = $('tplTableBody');
+      var tplItemForm = $('tplItemForm');
+      var tplFormTitle = $('tplFormTitle');
+      var tplWeekInput = $('tplWeekInput');
+      var tplTimelineInput = $('tplTimelineInput');
+      var tplStatusInput = $('tplStatusInput');
+      var tplPhaseInput = $('tplPhaseInput');
+      var tplTopicsInput = $('tplTopicsInput');
+      var tplResourcesInput = $('tplResourcesInput');
+      var tplResourceUrlInput = $('tplResourceUrlInput');
+      var tplRemarksInput = $('tplRemarksInput');
+      var tplFormCancelBtn = $('tplFormCancelBtn');
+      var tplListCloseBtn = $('tplListCloseBtn');
+      var editingTplId = null;
+
       function showErr(e) {
         errEl.hidden = false;
         errEl.textContent = e && e.kind === 'denied'
@@ -238,7 +257,8 @@
 
       function getSortedTemplates() {
         return Object.keys(templatesMap).map(function (k) {
-          return templatesMap[k];
+          var item = templatesMap[k];
+          return item ? Object.assign({ _id: k }, item) : null;
         }).filter(Boolean).sort(function (a, b) {
           return (Number(a.order) || Number(a.week) || 0) - (Number(b.order) || Number(b.week) || 0);
         });
@@ -777,6 +797,74 @@
         reviewDisplay.appendChild(h('div', { class: 'text-xs text-base-content/60 text-right pt-1', text: footerText }));
       }
 
+      function openTplForm(tplId, tplData) {
+        editingTplId = tplId || null;
+        tplFormTitle.textContent = editingTplId
+          ? i18n.t('編輯範本階段', 'Edit Template Stage')
+          : i18n.t('新增範本階段', 'Add Template Stage');
+        var list = getSortedTemplates();
+        var nextWk = list.length + 1;
+        var wk = (tplData && (tplData.week || tplData.order)) || nextWk;
+        tplWeekInput.value = wk;
+        tplTimelineInput.value = (tplData && tplData.timeline) || ('Week ' + wk);
+        tplStatusInput.value = (tplData && TASK_STATUS_META[tplData.defaultStatus] ? tplData.defaultStatus : 'pending');
+        tplPhaseInput.value = (tplData && tplData.phase) || '';
+        tplTopicsInput.value = (tplData && tplData.keyTopics) || '';
+        tplResourcesInput.value = (tplData && tplData.resources) || '';
+        tplResourceUrlInput.value = (tplData && tplData.resourceUrl) || '';
+        tplRemarksInput.value = (tplData && tplData.remarks) || '';
+        tplItemForm.hidden = false;
+        tplPhaseInput.focus();
+      }
+
+      function renderTemplateModalList() {
+        if (!tplTableBody) return;
+        tplTableBody.textContent = '';
+        var list = getSortedTemplates();
+        if (!list.length) {
+          tplTableBody.appendChild(
+            h('tr', {},
+              h('td', { colspan: '7', class: 'text-center py-6 text-base-content/60' },
+                i18n.t('目前沒有任何範本階段，請點選右上角「新增範本階段」建立。', 'No template stages yet. Click "Add Template Stage" above.')
+              )
+            )
+          );
+          return;
+        }
+        list.forEach(function (tpl) {
+          var id = tpl._id;
+          var wk = Number(tpl.week) || Number(tpl.order) || 1;
+          var tr = h('tr', { class: 'hover:bg-base-200/40' },
+            h('td', { class: 'font-semibold align-top', text: String(wk) }),
+            h('td', { class: 'whitespace-pre-line align-top font-medium', text: tpl.timeline || ('Week ' + wk) }),
+            h('td', { class: 'align-top font-semibold', text: tpl.phase || '' }),
+            h('td', { class: 'whitespace-pre-wrap align-top text-base-content/80', text: tpl.keyTopics || '' }),
+            h('td', { class: 'whitespace-pre-wrap align-top text-base-content/80', text: tpl.resources || '-' }),
+            h('td', { class: 'whitespace-pre-wrap align-top text-base-content/80', text: tpl.remarks || '-' }),
+            h('td', { class: 'align-top text-center' },
+              h('div', { class: 'flex items-center justify-center gap-1' },
+                h('button', {
+                  type: 'button',
+                  class: 'btn btn-ghost btn-xs btn-square',
+                  title: i18n.t('編輯此範本階段', 'Edit template stage'),
+                  onclick: function () { openTplForm(id, tpl); }
+                }, h('i', { class: 'fa-regular fa-pen-to-square', 'aria-hidden': 'true' })),
+                h('button', {
+                  type: 'button',
+                  class: 'btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-error',
+                  title: i18n.t('刪除此範本階段', 'Delete template stage'),
+                  onclick: function () {
+                    if (confirm(i18n.t('確定要從預設課綱範本刪除「' + (tpl.phase || '') + '」嗎？', 'Remove "' + (tpl.phase || '') + '" from default curriculum template?'))) {
+                      run(sync.remove(COL_TEMPLATES, id));
+                    }
+                  }
+                }, h('i', { class: 'fa-regular fa-trash-can', 'aria-hidden': 'true' }))
+              )
+            )
+          );
+          tplTableBody.appendChild(tr);
+        });
+      }
       function openHireModal(hireId, hireData) {
         editingHireId = hireId || null;
         hireModalTitle.textContent = editingHireId
@@ -831,10 +919,98 @@
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var existingCount = getHireTasks(selectedHireId).length;
           var msg = existingCount > 0
-            ? i18n.t('此新人已有 ' + existingCount + ' 筆階段項目，確定要額外匯入預設的 5 階段課綱範本嗎？', 'This new hire already has ' + existingCount + ' stages. Import the default 5-stage curriculum anyway?')
-            : i18n.t('確定要為此新人匯入預設的 5 階段課綱範本嗎？', 'Import the default 5-stage curriculum template for this new hire?');
+            ? i18n.t('此新人已有 ' + existingCount + ' 筆階段項目，確定要額外匯入預設課綱範本嗎？', 'This new hire already has ' + existingCount + ' stages. Import the default curriculum template anyway?')
+            : i18n.t('確定要為此新人匯入預設課綱範本嗎？', 'Import the default curriculum template for this new hire?');
           if (!confirm(msg)) return;
           run(applyCurriculumTemplateToHire(selectedHireId));
+        });
+
+        manageTemplateBtn.addEventListener('click', function () {
+          tplItemForm.hidden = true;
+          editingTplId = null;
+          renderTemplateModalList();
+          tplListModal.showModal();
+        });
+
+        tplListCloseBtn.addEventListener('click', function () {
+          tplListModal.close();
+        });
+
+        addTplItemBtn.addEventListener('click', function () {
+          openTplForm(null, null);
+        });
+
+        tplFormCancelBtn.addEventListener('click', function () {
+          tplItemForm.hidden = true;
+          editingTplId = null;
+        });
+
+        tplItemForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var wk = Math.max(1, Math.min(52, Number(tplWeekInput.value) || 1));
+          var timeline = tplTimelineInput.value.trim().slice(0, 120);
+          var defaultStatus = tplStatusInput.value || 'pending';
+          var phase = tplPhaseInput.value.trim().slice(0, 200);
+          var keyTopics = tplTopicsInput.value.trim().slice(0, 4000);
+          var resources = tplResourcesInput.value.trim().slice(0, 500);
+          var resourceUrl = tplResourceUrlInput.value.trim().slice(0, 500);
+          var remarks = tplRemarksInput.value.trim().slice(0, 2000);
+          if (!phase || !timeline) return;
+
+          var id = editingTplId || ('tpl_' + sync.newId());
+          var payload = {
+            order: wk,
+            week: wk,
+            timeline: timeline,
+            phase: phase,
+            keyTopics: keyTopics,
+            resources: resources,
+            resourceUrl: resourceUrl,
+            remarks: remarks,
+            defaultStatus: defaultStatus,
+            updatedAt: Date.now()
+          };
+          tplItemForm.hidden = true;
+          editingTplId = null;
+          run(sync.save(COL_TEMPLATES, id, payload));
+        });
+
+        saveCurrentAsTplBtn.addEventListener('click', function () {
+          if (!selectedHireId) return;
+          var currentTasks = getHireTasks(selectedHireId);
+          if (!currentTasks.length) {
+            alert(i18n.t('目前選定的新人尚無任何課綱階段可存為範本。', 'Current new hire has no study stages to save as template.'));
+            return;
+          }
+          var confirmMsg = i18n.t(
+            '確定要將目前新人的 ' + currentTasks.length + ' 個階段覆蓋儲存為新的「預設課綱範本」嗎？',
+            'Overwrite the default curriculum template with the ' + currentTasks.length + ' stages from the current new hire?'
+          );
+          if (!confirm(confirmMsg)) return;
+          var removeOps = Object.keys(templatesMap).map(function (k) {
+            return sync.remove(COL_TEMPLATES, k);
+          });
+          run(
+            Promise.all(removeOps).then(function () {
+              var saveOps = currentTasks.map(function (item, idx) {
+                var t = item.data;
+                var wk = Number(t.week) || (idx + 1);
+                return sync.save(COL_TEMPLATES, 'tpl_w' + (idx + 1) + '_' + sync.newId(), {
+                  order: wk,
+                  week: wk,
+                  timeline: t.timeline || ('Week ' + wk),
+                  phase: t.phase || t.title || '',
+                  keyTopics: t.keyTopics || t.traineeNote || '',
+                  resources: t.resources || '',
+                  resourceUrl: t.resourceUrl || '',
+                  remarks: t.remarks || '',
+                  defaultStatus: t.status === 'final_eval' ? 'final_eval' : 'pending',
+                  updatedAt: Date.now()
+                });
+              });
+              return Promise.all(saveOps);
+            })
+          );
         });
 
         editHireBtn.addEventListener('click', function () {
@@ -1110,7 +1286,11 @@
       });
 
       var subTemplates = sync.subscribe(COL_TEMPLATES, {
-        onChange: function (map) { templatesMap = map || {}; renderAll(); },
+        onChange: function (map) {
+          templatesMap = map || {};
+          renderTemplateModalList();
+          renderAll();
+        },
         onError: showErr,
         onStatus: function () {}
       });

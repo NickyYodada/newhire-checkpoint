@@ -73,6 +73,9 @@
               <button id="applyTemplateBtn" type="button" class="btn btn-xs btn-soft btn-primary">
                 <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span data-i18n-zh="套用預設課綱範本" data-i18n-en="Apply Default Curriculum">套用預設課綱範本</span>
               </button>
+              <button id="manageTemplateBtn" type="button" class="btn btn-xs btn-soft btn-secondary">
+                <i class="fa-solid fa-sliders" aria-hidden="true"></i><span data-i18n-zh="編輯課綱範本" data-i18n-en="Edit Curriculum Template">編輯課綱範本</span>
+              </button>
               <button id="editHireBtn" type="button" class="btn btn-xs btn-ghost">
                 <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i><span data-i18n-zh="編輯新人" data-i18n-en="Edit Hire">編輯新人</span>
               </button>
@@ -324,6 +327,99 @@
               <button type="submit" class="btn btn-sm btn-primary" data-i18n-zh="儲存項目" data-i18n-en="Save Stage">儲存項目</button>
             </div>
           </form>
+        </div>
+      </dialog>
+
+      <!-- 預設課綱範本管理 Modal -->
+      <dialog id="tplListModal" class="modal">
+        <div class="modal-box max-w-4xl space-y-4">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h3 class="font-bold text-lg flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-secondary" aria-hidden="true"></i>
+                <span data-i18n-zh="管理預設課綱範本" data-i18n-en="Manage Default Curriculum Template">管理預設課綱範本</span>
+              </h3>
+              <p class="text-xs text-base-content/70 mt-0.5" data-i18n-zh="在此新增、編輯或刪除範本階段；日後新增新人或點選「套用預設課綱範本」時會自動帶入這份清單。" data-i18n-en="Add, edit, or delete template stages here. Applying the template will populate these stages for a new hire.">在此新增、編輯或刪除範本階段；日後新增新人或點選「套用預設課綱範本」時會自動帶入這份清單。</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button id="saveCurrentAsTplBtn" type="button" class="btn btn-xs btn-soft">
+                <i class="fa-solid fa-file-import" aria-hidden="true"></i><span data-i18n-zh="將目前新人的課綱存為範本" data-i18n-en="Save Current Hire's Plan as Template">將目前新人的課綱存為範本</span>
+              </button>
+              <button id="addTplItemBtn" type="button" class="btn btn-xs btn-primary">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i><span data-i18n-zh="新增範本階段" data-i18n-en="Add Template Stage">新增範本階段</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-box border border-base-200 max-h-96">
+            <table class="table table-xs w-full align-top">
+              <thead class="bg-base-200/70">
+                <tr>
+                  <th class="w-14">#</th>
+                  <th class="w-28">Timeline</th>
+                  <th class="w-40">Phase / Domain</th>
+                  <th class="min-w-56">Key Topics</th>
+                  <th class="w-32">Resources</th>
+                  <th class="w-32">Remarks</th>
+                  <th class="w-24 text-center" data-i18n-zh="操作" data-i18n-en="Actions">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tplTableBody"></tbody>
+            </table>
+          </div>
+
+          <!-- 內嵌新增 / 編輯單筆範本表單 -->
+          <form id="tplItemForm" class="p-3 rounded-box bg-base-200/60 border border-base-300 space-y-3" hidden>
+            <div class="font-semibold text-sm" id="tplFormTitle">編輯範本階段</div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label class="form-control w-full">
+                <div class="label py-0.5"><span class="label-text text-xs" data-i18n-zh="週期順序 (Week 1~52) *" data-i18n-en="Cycle Order (1~52) *">週期順序 (Week 1~52) *</span></div>
+                <input id="tplWeekInput" type="number" min="1" max="52" class="input input-bordered input-xs w-full" required>
+              </label>
+              <label class="form-control w-full">
+                <div class="label py-0.5"><span class="label-text text-xs">Timeline *</span></div>
+                <input id="tplTimelineInput" type="text" class="input input-bordered input-xs w-full" required placeholder="例如：Week 1">
+              </label>
+              <label class="form-control w-full">
+                <div class="label py-0.5"><span class="label-text text-xs" data-i18n-zh="預設狀態" data-i18n-en="Default Status">預設狀態</span></div>
+                <select id="tplStatusInput" class="select select-bordered select-xs w-full">
+                  <option value="pending">⏳ Pending</option>
+                  <option value="completed">✅ Completed</option>
+                  <option value="final_eval">🏁 Final Evaluation</option>
+                </select>
+              </label>
+            </div>
+            <label class="form-control w-full">
+              <div class="label py-0.5"><span class="label-text text-xs">Phase / Domain *</span></div>
+              <input id="tplPhaseInput" type="text" class="input input-bordered input-xs w-full" required>
+            </label>
+            <label class="form-control w-full">
+              <div class="label py-0.5"><span class="label-text text-xs">Key Topics &amp; Hands-on Tasks *</span></div>
+              <textarea id="tplTopicsInput" class="textarea textarea-bordered textarea-xs w-full" rows="4" required></textarea>
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label class="form-control w-full">
+                <div class="label py-0.5"><span class="label-text text-xs">Resources &amp; Format</span></div>
+                <input id="tplResourcesInput" type="text" class="input input-bordered input-xs w-full">
+              </label>
+              <label class="form-control w-full">
+                <div class="label py-0.5"><span class="label-text text-xs" data-i18n-zh="參考連結 URL（選填）" data-i18n-en="Reference URL (Optional)">參考連結 URL（選填）</span></div>
+                <input id="tplResourceUrlInput" type="url" class="input input-bordered input-xs w-full" placeholder="https://...">
+              </label>
+            </div>
+            <label class="form-control w-full">
+              <div class="label py-0.5"><span class="label-text text-xs">Remarks / Milestones</span></div>
+              <textarea id="tplRemarksInput" class="textarea textarea-bordered textarea-xs w-full" rows="2"></textarea>
+            </label>
+            <div class="flex justify-end gap-2">
+              <button id="tplFormCancelBtn" type="button" class="btn btn-xs btn-ghost" data-i18n-zh="取消編輯" data-i18n-en="Cancel">取消編輯</button>
+              <button type="submit" class="btn btn-xs btn-primary" data-i18n-zh="儲存範本項目" data-i18n-en="Save Template Stage">儲存範本項目</button>
+            </div>
+          </form>
+
+          <div class="modal-action">
+            <button id="tplListCloseBtn" type="button" class="btn btn-sm btn-ghost" data-i18n-zh="關閉" data-i18n-en="Close">關閉</button>
+          </div>
         </div>
       </dialog>
     </section>
