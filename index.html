@@ -422,6 +422,24 @@
           </div>
         </div>
       </dialog>
+
+      <!-- 共用確認對話框 Modal（取代容易被內嵌瀏覽器攔截的原生 confirm/prompt） -->
+      <dialog id="confirmModal" class="modal">
+        <div class="modal-box max-w-md space-y-3">
+          <h3 id="confirmModalTitle" class="font-bold text-base flex items-center gap-2">
+            <i class="fa-solid fa-circle-question text-warning" aria-hidden="true"></i>
+            <span data-i18n-zh="請確認操作" data-i18n-en="Confirm Action">請確認操作</span>
+          </h3>
+          <p id="confirmModalMsg" class="text-sm text-base-content/80 whitespace-pre-wrap"></p>
+          <div id="confirmPromptWrap" class="pt-1" hidden>
+            <input id="confirmPromptInput" type="date" class="input input-bordered input-sm w-full">
+          </div>
+          <div class="modal-action">
+            <button id="confirmCancelBtn" type="button" class="btn btn-sm btn-ghost" data-i18n-zh="取消" data-i18n-en="Cancel">取消</button>
+            <button id="confirmOkBtn" type="button" class="btn btn-sm btn-primary" data-i18n-zh="確認執行" data-i18n-en="Confirm">確認執行</button>
+          </div>
+        </div>
+      </dialog>
     </section>
   </div>
   <!-- ═══ 擴充區結束 ═══ -->

@@ -230,6 +230,47 @@
       var tplListCloseBtn = $('tplListCloseBtn');
       var editingTplId = null;
 
+      var confirmModal = $('confirmModal');
+      var confirmModalMsg = $('confirmModalMsg');
+      var confirmPromptWrap = $('confirmPromptWrap');
+      var confirmPromptInput = $('confirmPromptInput');
+      var confirmCancelBtn = $('confirmCancelBtn');
+      var confirmOkBtn = $('confirmOkBtn');
+      var pendingConfirmCallback = null;
+
+      function askConfirm(messageText, onOk, opts) {
+        opts = opts || {};
+        confirmModalMsg.textContent = messageText;
+        if (opts.promptDate) {
+          confirmPromptWrap.hidden = false;
+          confirmPromptInput.value = opts.defaultDate || new Date().toISOString().slice(0, 10);
+        } else {
+          confirmPromptWrap.hidden = true;
+        }
+        confirmOkBtn.className = 'btn btn-sm ' + (opts.danger ? 'btn-error' : 'btn-primary');
+        confirmOkBtn.textContent = opts.okLabel || i18n.t('確認執行', 'Confirm');
+        pendingConfirmCallback = function () {
+          var val = opts.promptDate ? (confirmPromptInput.value || '').trim() : true;
+          onOk(val);
+        };
+        confirmModal.showModal();
+      }
+
+      if (confirmCancelBtn) {
+        confirmCancelBtn.addEventListener('click', function () {
+          pendingConfirmCallback = null;
+          confirmModal.close();
+        });
+      }
+      if (confirmOkBtn) {
+        confirmOkBtn.addEventListener('click', function () {
+          var cb = pendingConfirmCallback;
+          pendingConfirmCallback = null;
+          confirmModal.close();
+          if (cb) cb();
+        });
+      }
+
       function showErr(e) {
         errEl.hidden = false;
         errEl.textContent = e && e.kind === 'denied'
@@ -750,9 +791,11 @@
                 'aria-label': delLbl,
                 title: delLbl,
                 onclick: function () {
-                  if (confirm(i18n.t('確定要刪除「' + phaseText + '」嗎？', 'Delete stage "' + phaseText + '"?'))) {
-                    run(sync.remove(COL_TASKS, id));
-                  }
+                  askConfirm(
+                    i18n.t('確定要刪除「' + phaseText + '」嗎？', 'Delete stage "' + phaseText + '"?'),
+                    function () { run(sync.remove(COL_TASKS, id)); },
+                    { danger: true }
+                  );
                 }
               }, h('i', { class: 'fa-regular fa-trash-can', 'aria-hidden': 'true' }))
             );
@@ -862,9 +905,11 @@
                   class: 'btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-error',
                   title: i18n.t('刪除此範本階段', 'Delete template stage'),
                   onclick: function () {
-                    if (confirm(i18n.t('確定要從預設課綱範本刪除「' + (tpl.phase || '') + '」嗎？', 'Remove "' + (tpl.phase || '') + '" from default curriculum template?'))) {
-                      run(sync.remove(COL_TEMPLATES, id));
-                    }
+                    askConfirm(
+                      i18n.t('確定要從預設課綱範本刪除「' + (tpl.phase || '') + '」嗎？', 'Remove "' + (tpl.phase || '') + '" from default curriculum template?'),
+                      function () { run(sync.remove(COL_TEMPLATES, id)); },
+                      { danger: true }
+                    );
                   }
                 }, h('i', { class: 'fa-regular fa-trash-can', 'aria-hidden': 'true' }))
               )
@@ -928,16 +973,21 @@
           var existingCount = getHireTasks(selectedHireId).length;
           var msg = existingCount > 0
             ? i18n.t(
-                '確定要套用預設課綱範本並「覆蓋」目前新人的現有資料（共 ' + existingCount + ' 筆階段項目）嗎？',
-                'Apply default curriculum template and OVERWRITE the current ' + existingCount + ' stage(s) for this new hire?'
+                '確定要「套用預設課綱範本並覆蓋當下資料」（目前共有 ' + existingCount + ' 筆階段項目將被覆蓋）嗎？',
+                'Apply default curriculum template and OVERWRITE current data (' + existingCount + ' stage(s) will be replaced)?'
               )
             : i18n.t(
                 '確定要套用預設課綱範本並覆蓋當下資料嗎？',
                 'Apply default curriculum template and overwrite current data?'
               );
-          if (!confirm(msg)) return;
-          selectedFilter = 'all';
-          run(applyCurriculumTemplateToHire(selectedHireId, null, true));
+          askConfirm(
+            msg,
+            function () {
+              selectedFilter = 'all';
+              run(applyCurriculumTemplateToHire(selectedHireId, null, true));
+            },
+            { okLabel: i18n.t('套用並覆蓋', 'Apply & Overwrite') }
+          );
         });
 
         manageTemplateBtn.addEventListener('click', function () {
@@ -994,38 +1044,39 @@
           if (!selectedHireId) return;
           var currentTasks = getHireTasks(selectedHireId);
           if (!currentTasks.length) {
-            alert(i18n.t('目前選定的新人尚無任何課綱階段可存為範本。', 'Current new hire has no study stages to save as template.'));
+            showErr(new Error(i18n.t('目前選定的新人尚無任何課綱階段可存為範本。', 'Current new hire has no study stages to save as template.')));
             return;
           }
           var confirmMsg = i18n.t(
             '確定要將目前新人的 ' + currentTasks.length + ' 個階段覆蓋儲存為新的「預設課綱範本」嗎？',
             'Overwrite the default curriculum template with the ' + currentTasks.length + ' stages from the current new hire?'
           );
-          if (!confirm(confirmMsg)) return;
-          var removeOps = Object.keys(templatesMap).map(function (k) {
-            return sync.remove(COL_TEMPLATES, k);
-          });
-          run(
-            Promise.all(removeOps).then(function () {
-              var saveOps = currentTasks.map(function (item, idx) {
-                var t = item.data;
-                var wk = Number(t.week) || (idx + 1);
-                return sync.save(COL_TEMPLATES, 'tpl_w' + (idx + 1) + '_' + sync.newId(), {
-                  order: wk,
-                  week: wk,
-                  timeline: t.timeline || ('Week ' + wk),
-                  phase: t.phase || t.title || '',
-                  keyTopics: t.keyTopics || t.traineeNote || '',
-                  resources: t.resources || '',
-                  resourceUrl: t.resourceUrl || '',
-                  remarks: t.remarks || '',
-                  defaultStatus: t.status === 'final_eval' ? 'final_eval' : 'pending',
-                  updatedAt: Date.now()
+          askConfirm(confirmMsg, function () {
+            var removeOps = Object.keys(templatesMap).map(function (k) {
+              return sync.remove(COL_TEMPLATES, k);
+            });
+            run(
+              Promise.all(removeOps).then(function () {
+                var saveOps = currentTasks.map(function (item, idx) {
+                  var t = item.data;
+                  var wk = Number(t.week) || (idx + 1);
+                  return sync.save(COL_TEMPLATES, 'tpl_w' + (idx + 1) + '_' + sync.newId(), {
+                    order: wk,
+                    week: wk,
+                    timeline: t.timeline || ('Week ' + wk),
+                    phase: t.phase || t.title || '',
+                    keyTopics: t.keyTopics || t.traineeNote || '',
+                    resources: t.resources || '',
+                    resourceUrl: t.resourceUrl || '',
+                    remarks: t.remarks || '',
+                    defaultStatus: t.status === 'final_eval' ? 'final_eval' : 'pending',
+                    updatedAt: Date.now()
+                  });
                 });
-              });
-              return Promise.all(saveOps);
-            })
-          );
+                return Promise.all(saveOps);
+              })
+            );
+          });
         });
 
         editHireBtn.addEventListener('click', function () {
@@ -1036,19 +1087,24 @@
         deleteHireBtn.addEventListener('click', function () {
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var hr = hiresMap[selectedHireId];
-          if (!confirm(i18n.t('確定要刪除新人「' + (hr.name || '') + '」及其所有讀書計畫與評估紀錄嗎？', 'Delete new hire "' + (hr.name || '') + '" and all their study stages and evaluations?'))) return;
-          var targetHireId = selectedHireId;
-          var promises = [sync.remove(COL_HIRES, targetHireId)];
-          getHireTasks(targetHireId).forEach(function (t) {
-            promises.push(sync.remove(COL_TASKS, t.id));
-          });
-          var revs = getHireReviews(targetHireId);
-          Object.keys(revs).forEach(function (w) {
-            promises.push(sync.remove(COL_REVIEWS, revs[w].id));
-          });
-          selectedHireId = '';
-          saveSelectedHirePref('');
-          run(Promise.all(promises));
+          askConfirm(
+            i18n.t('確定要刪除新人「' + (hr.name || '') + '」及其所有讀書計畫與評估紀錄嗎？', 'Delete new hire "' + (hr.name || '') + '" and all their study stages and evaluations?'),
+            function () {
+              var targetHireId = selectedHireId;
+              var promises = [sync.remove(COL_HIRES, targetHireId)];
+              getHireTasks(targetHireId).forEach(function (t) {
+                promises.push(sync.remove(COL_TASKS, t.id));
+              });
+              var revs = getHireReviews(targetHireId);
+              Object.keys(revs).forEach(function (w) {
+                promises.push(sync.remove(COL_REVIEWS, revs[w].id));
+              });
+              selectedHireId = '';
+              saveSelectedHirePref('');
+              run(Promise.all(promises));
+            },
+            { danger: true }
+          );
         });
 
         hireModalCancel.addEventListener('click', function () {
@@ -1106,37 +1162,43 @@
             '確定要刪除整個週期（Stage / Week ' + targetWk + '，共 ' + wkTasks.length + ' 筆項目）及其 Mentor 評估紀錄嗎？',
             'Delete entire cycle (Stage / Week ' + targetWk + ', ' + wkTasks.length + ' items) and its Mentor evaluation?'
           );
-          if (!confirm(confirmMsg)) return;
-          var promises = wkTasks.map(function (t) { return sync.remove(COL_TASKS, t.id); });
-          if (wkRev) promises.push(sync.remove(COL_REVIEWS, wkRev.id));
-          selectedFilter = 'all';
-          run(Promise.all(promises));
+          askConfirm(confirmMsg, function () {
+            var promises = wkTasks.map(function (t) { return sync.remove(COL_TASKS, t.id); });
+            if (wkRev) promises.push(sync.remove(COL_REVIEWS, wkRev.id));
+            selectedFilter = 'all';
+            run(Promise.all(promises));
+          }, { danger: true });
         });
 
         autoDateBtn.addEventListener('click', function () {
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var hr = hiresMap[selectedHireId];
-          var baseDate = hr.startDate || '';
-          if (!baseDate) {
-            baseDate = prompt(
-              i18n.t('請輸入新人的到職日（格式 YYYY-MM-DD），系統將自動推算各週期時間範圍：', 'Enter start date (YYYY-MM-DD) to auto-calculate weekly date ranges:'),
-              new Date().toISOString().slice(0, 10)
-            ) || '';
-            baseDate = baseDate.trim();
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(baseDate)) return;
-            run(sync.save(COL_HIRES, selectedHireId, { startDate: baseDate, updatedAt: Date.now() }));
-          }
-          var allTasks = getHireTasks(selectedHireId);
-          var promises = allTasks.map(function (item) {
-            var wk = Number(item.data.week) || 1;
-            var r = calcWeekRangeFromHireStart(baseDate, wk);
-            return sync.save(COL_TASKS, item.id, {
-              startDate: r.startDate,
-              endDate: r.endDate,
-              updatedAt: Date.now()
+          function applyBatchDates(baseDate) {
+            var allTasks = getHireTasks(selectedHireId);
+            var promises = allTasks.map(function (item) {
+              var wk = Number(item.data.week) || 1;
+              var r = calcWeekRangeFromHireStart(baseDate, wk);
+              return sync.save(COL_TASKS, item.id, {
+                startDate: r.startDate,
+                endDate: r.endDate,
+                updatedAt: Date.now()
+              });
             });
-          });
-          run(Promise.all(promises));
+            run(Promise.all(promises));
+          }
+          if (hr.startDate) {
+            applyBatchDates(hr.startDate);
+          } else {
+            askConfirm(
+              i18n.t('請選擇新人的到職日（系統將以此自動推算各週期 5 個工作日範圍）：', 'Select start date to auto-calculate weekly 5-workday ranges:'),
+              function (pickedDate) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)) return;
+                run(sync.save(COL_HIRES, selectedHireId, { startDate: pickedDate, updatedAt: Date.now() }));
+                applyBatchDates(pickedDate);
+              },
+              { promptDate: true }
+            );
+          }
         });
 
         addTaskBtn.addEventListener('click', function () {
