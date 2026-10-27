@@ -321,38 +321,46 @@
         return weeks.map(function (w) { return stageMap[w]; });
       }
 
-      function applyCurriculumTemplateToHire(hireId, hireStartDate) {
+      function applyCurriculumTemplateToHire(hireId, hireStartDate, overwriteExisting) {
         var tpls = getSortedTemplates();
         if (!tpls.length) {
           showErr(new Error(i18n.t('目前資料庫中尚無預設課綱範本（/data/templates）', 'No default curriculum template found in database (/data/templates)')));
           return Promise.resolve();
         }
+        var removePromise = Promise.resolve();
+        if (overwriteExisting) {
+          var oldTasks = getHireTasks(hireId);
+          var delOps = oldTasks.map(function (t) { return sync.remove(COL_TASKS, t.id); });
+          removePromise = Promise.all(delOps);
+        }
         var baseDate = hireStartDate || (hiresMap[hireId] && hiresMap[hireId].startDate) || '';
-        var now = Date.now();
-        var promises = tpls.map(function (tpl, idx) {
-          var taskId = sync.newId();
-          var wk = Number(tpl.week) || (idx + 1);
-          var range = calcWeekRangeFromHireStart(baseDate, wk);
-          return sync.save(COL_TASKS, taskId, {
-            hireId: hireId,
-            week: wk,
-            timeline: tpl.timeline || ('Week ' + wk),
-            startDate: range.startDate || '',
-            endDate: range.endDate || '',
-            phase: tpl.phase || '',
-            title: tpl.phase || '',
-            keyTopics: tpl.keyTopics || '',
-            resources: tpl.resources || '',
-            resourceUrl: tpl.resourceUrl || '',
-            remarks: tpl.remarks || '',
-            traineeNote: tpl.remarks || '',
-            status: tpl.defaultStatus || 'pending',
-            createdAt: now + idx,
-            updatedAt: now + idx,
-            updatedBy: (ctx.session && ctx.session.name) || ''
+        return removePromise.then(function () {
+          var now = Date.now();
+          var promises = tpls.map(function (tpl, idx) {
+            var taskId = sync.newId();
+            var wk = Number(tpl.week) || (idx + 1);
+            var range = calcWeekRangeFromHireStart(baseDate, wk);
+            return sync.save(COL_TASKS, taskId, {
+              hireId: hireId,
+              week: wk,
+              timeline: tpl.timeline || ('Week ' + wk),
+              startDate: range.startDate || '',
+              endDate: range.endDate || '',
+              phase: tpl.phase || '',
+              title: tpl.phase || '',
+              keyTopics: tpl.keyTopics || '',
+              resources: tpl.resources || '',
+              resourceUrl: tpl.resourceUrl || '',
+              remarks: tpl.remarks || '',
+              traineeNote: tpl.remarks || '',
+              status: tpl.defaultStatus || 'pending',
+              createdAt: now + idx,
+              updatedAt: now + idx,
+              updatedBy: (ctx.session && ctx.session.name) || ''
+            });
           });
+          return Promise.all(promises);
         });
-        return Promise.all(promises);
       }
 
       // 依據某個階段的日期變更，自動往後遞推後續所有週期（Week N+1 接續 Week N 結束日的下一個工作日，並維持每週 5 個工作日）
@@ -919,10 +927,17 @@
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var existingCount = getHireTasks(selectedHireId).length;
           var msg = existingCount > 0
-            ? i18n.t('此新人已有 ' + existingCount + ' 筆階段項目，確定要額外匯入預設課綱範本嗎？', 'This new hire already has ' + existingCount + ' stages. Import the default curriculum template anyway?')
-            : i18n.t('確定要為此新人匯入預設課綱範本嗎？', 'Import the default curriculum template for this new hire?');
+            ? i18n.t(
+                '確定要套用預設課綱範本並「覆蓋」目前新人的現有資料（共 ' + existingCount + ' 筆階段項目）嗎？',
+                'Apply default curriculum template and OVERWRITE the current ' + existingCount + ' stage(s) for this new hire?'
+              )
+            : i18n.t(
+                '確定要套用預設課綱範本並覆蓋當下資料嗎？',
+                'Apply default curriculum template and overwrite current data?'
+              );
           if (!confirm(msg)) return;
-          run(applyCurriculumTemplateToHire(selectedHireId));
+          selectedFilter = 'all';
+          run(applyCurriculumTemplateToHire(selectedHireId, null, true));
         });
 
         manageTemplateBtn.addEventListener('click', function () {
