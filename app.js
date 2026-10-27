@@ -50,25 +50,58 @@
     return null;
   }
 
-  function addDaysIso(baseDateStr, daysToAdd) {
-    if (!baseDateStr) return '';
-    var parts = String(baseDateStr).split('-');
-    if (parts.length !== 3) return '';
-    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    if (isNaN(d.getTime())) return '';
-    d.setDate(d.getDate() + daysToAdd);
+  function formatIsoDate(d) {
     var y = d.getFullYear();
     var m = String(d.getMonth() + 1).padStart(2, '0');
     var day = String(d.getDate()).padStart(2, '0');
     return y + '-' + m + '-' + day;
   }
 
+  function parseIsoDate(dateStr) {
+    if (!dateStr) return null;
+    var parts = String(dateStr).split('-');
+    if (parts.length !== 3) return null;
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // 若落在週末，自動順延至下一個週一（工作日）
+  function ensureWorkday(d) {
+    var copy = new Date(d.getTime());
+    var dow = copy.getDay();
+    if (dow === 6) copy.setDate(copy.getDate() + 2);
+    else if (dow === 0) copy.setDate(copy.getDate() + 1);
+    return copy;
+  }
+
+  // 從起始日往後推 N 個工作日（自動跳過週六、週日）
+  function addWorkdays(startDate, workdaysToAdd) {
+    var d = ensureWorkday(startDate);
+    var remaining = Math.max(0, Number(workdaysToAdd) || 0);
+    while (remaining > 0) {
+      d.setDate(d.getDate() + 1);
+      var dow = d.getDay();
+      if (dow !== 0 && dow !== 6) {
+        remaining--;
+      }
+    }
+    return d;
+  }
+
+  // 輸入開始日期後，自動計算滿 5 個工作日的結束日期（例如週一 11/30 → 週五 12/04）
+  function calcDefaultWorkEndDate(startDateStr) {
+    var d = parseIsoDate(startDateStr);
+    if (!d) return '';
+    return formatIsoDate(addWorkdays(d, 4));
+  }
+
   function calcWeekRangeFromHireStart(hireStartDate, weekOrder) {
-    if (!hireStartDate) return { startDate: '', endDate: '' };
+    var d = parseIsoDate(hireStartDate);
+    if (!d) return { startDate: '', endDate: '' };
     var idx = Math.max(0, (Number(weekOrder) || 1) - 1);
-    var s = addDaysIso(hireStartDate, idx * 7);
-    var e = addDaysIso(hireStartDate, idx * 7 + 4);
-    return { startDate: s, endDate: e };
+    var weekStart = addWorkdays(d, idx * 5);
+    var weekEnd = addWorkdays(weekStart, 4);
+    return { startDate: formatIsoDate(weekStart), endDate: formatIsoDate(weekEnd) };
   }
 
   window.App = {
@@ -484,15 +517,6 @@
 
           if (canWrite) {
             var dateBox = h('div', { class: 'space-y-1 pt-0.5' });
-            var startInput = h('input', {
-              type: 'date',
-              class: 'input input-bordered input-xs w-full text-xs',
-              value: t.startDate || '',
-              title: i18n.t('開始日期', 'Start Date'),
-              onchange: function (ev) {
-                run(sync.save(COL_TASKS, id, { startDate: ev.target.value || '', updatedAt: Date.now() }));
-              }
-            });
             var endInput = h('input', {
               type: 'date',
               class: 'input input-bordered input-xs w-full text-xs',
@@ -500,6 +524,18 @@
               title: i18n.t('結束日期', 'End Date'),
               onchange: function (ev) {
                 run(sync.save(COL_TASKS, id, { endDate: ev.target.value || '', updatedAt: Date.now() }));
+              }
+            });
+            var startInput = h('input', {
+              type: 'date',
+              class: 'input input-bordered input-xs w-full text-xs',
+              value: t.startDate || '',
+              title: i18n.t('開始日期（選擇後自動帶入 5 個工作日結束日）', 'Start Date (auto-fills 5-workday End Date)'),
+              onchange: function (ev) {
+                var newStart = ev.target.value || '';
+                var autoEnd = newStart ? calcDefaultWorkEndDate(newStart) : (endInput.value || '');
+                if (autoEnd) endInput.value = autoEnd;
+                run(sync.save(COL_TASKS, id, { startDate: newStart, endDate: autoEnd, updatedAt: Date.now() }));
               }
             });
             dateBox.appendChild(h('div', { class: 'flex items-center gap-1 text-[11px] text-base-content/60' },
@@ -832,6 +868,15 @@
           if (!selectedHireId) return;
           openTaskModal(null, null);
         });
+
+        function syncModalWorkEndDate() {
+          var sVal = taskStartDateInput.value;
+          if (!sVal) return;
+          var autoEnd = calcDefaultWorkEndDate(sVal);
+          if (autoEnd) taskEndDateInput.value = autoEnd;
+        }
+        taskStartDateInput.addEventListener('change', syncModalWorkEndDate);
+        taskStartDateInput.addEventListener('input', syncModalWorkEndDate);
 
         taskModalCancel.addEventListener('click', function () {
           taskModal.close();
