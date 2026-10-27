@@ -335,6 +335,82 @@
         return Promise.all(promises);
       }
 
+      // 依據某個階段的日期變更，自動往後遞推後續所有週期（Week N+1 接續 Week N 結束日的下一個工作日，並維持每週 5 個工作日）
+      function buildCascadedTaskDateUpdates(hireId, anchorWeek, anchorEndDateStr) {
+        var endD = parseIsoDate(anchorEndDateStr);
+        if (!endD) return [];
+        var allTasks = getHireTasks(hireId);
+        // 整理所有大於 anchorWeek 的週次（由小到大）
+        var futureWeeks = [];
+        allTasks.forEach(function (item) {
+          var w = Number(item.data.week) || 1;
+          if (w > anchorWeek && futureWeeks.indexOf(w) === -1) {
+            futureWeeks.push(w);
+          }
+        });
+        futureWeeks.sort(function (a, b) { return a - b; });
+
+        var prevEnd = endD;
+        var weekRangeMap = {};
+        futureWeeks.forEach(function (wk) {
+          var nextStart = addWorkdays(prevEnd, 1);
+          var nextEnd = addWorkdays(nextStart, 4);
+          weekRangeMap[wk] = {
+            startDate: formatIsoDate(nextStart),
+            endDate: formatIsoDate(nextEnd)
+          };
+          prevEnd = nextEnd;
+        });
+
+        var promises = [];
+        var now = Date.now();
+        allTasks.forEach(function (item) {
+          var w = Number(item.data.week) || 1;
+          var r = weekRangeMap[w];
+          if (r && (item.data.startDate !== r.startDate || item.data.endDate !== r.endDate)) {
+            promises.push(sync.save(COL_TASKS, item.id, {
+              startDate: r.startDate,
+              endDate: r.endDate,
+              updatedAt: now
+            }));
+          }
+        });
+        return promises;
+      }
+
+      // 取得某個目標週次 (targetWeek) 的預設起訖日：優先從前一個週次延伸下一個工作日，否則從新人到職日推算
+      function calcDefaultRangeForTargetWeek(hireId, targetWeek) {
+        var wk = Math.max(1, Number(targetWeek) || 1);
+        var allTasks = getHireTasks(hireId);
+        // 尋找小於 wk 且最接近的已有日期階段
+        var bestPrevWeek = 0;
+        var bestPrevEnd = null;
+        allTasks.forEach(function (item) {
+          var w = Number(item.data.week) || 1;
+          if (w < wk && w >= bestPrevWeek) {
+            var ed = parseIsoDate(item.data.endDate) || (item.data.startDate ? addWorkdays(parseIsoDate(item.data.startDate), 4) : null);
+            if (ed) {
+              bestPrevWeek = w;
+              bestPrevEnd = ed;
+            }
+          }
+        });
+        if (bestPrevEnd) {
+          var gapWeeks = Math.max(1, wk - bestPrevWeek);
+          var curEnd = bestPrevEnd;
+          var curStart = null;
+          for (var i = 0; i < gapWeeks; i++) {
+            curStart = addWorkdays(curEnd, 1);
+            curEnd = addWorkdays(curStart, 4);
+          }
+          return {
+            startDate: formatIsoDate(curStart),
+            endDate: formatIsoDate(curEnd)
+          };
+        }
+        var currentHire = hiresMap[hireId] || {};
+        return calcWeekRangeFromHireStart(currentHire.startDate, wk);
+      }
       function makeEvalBadge(statusKey) {
         var meta = EVAL_META[statusKey] || EVAL_META.on_track;
         return h('span', { class: 'badge badge-sm gap-1 ' + meta.badge },
@@ -521,21 +597,30 @@
               type: 'date',
               class: 'input input-bordered input-xs w-full text-xs',
               value: t.endDate || '',
-              title: i18n.t('結束日期', 'End Date'),
+              title: i18n.t('結束日期（修改後自動遞推後續週期）', 'End Date (auto-cascades following weeks)'),
               onchange: function (ev) {
-                run(sync.save(COL_TASKS, id, { endDate: ev.target.value || '', updatedAt: Date.now() }));
+                var newEnd = ev.target.value || '';
+                var ops = [sync.save(COL_TASKS, id, { endDate: newEnd, updatedAt: Date.now() })];
+                if (newEnd) {
+                  ops = ops.concat(buildCascadedTaskDateUpdates(selectedHireId, wk, newEnd));
+                }
+                run(Promise.all(ops));
               }
             });
             var startInput = h('input', {
               type: 'date',
               class: 'input input-bordered input-xs w-full text-xs',
               value: t.startDate || '',
-              title: i18n.t('開始日期（選擇後自動帶入 5 個工作日結束日）', 'Start Date (auto-fills 5-workday End Date)'),
+              title: i18n.t('開始日期（選擇後自動帶入本週結束日並遞推後續週期）', 'Start Date (auto-fills End Date & cascades following weeks)'),
               onchange: function (ev) {
                 var newStart = ev.target.value || '';
                 var autoEnd = newStart ? calcDefaultWorkEndDate(newStart) : (endInput.value || '');
                 if (autoEnd) endInput.value = autoEnd;
-                run(sync.save(COL_TASKS, id, { startDate: newStart, endDate: autoEnd, updatedAt: Date.now() }));
+                var ops = [sync.save(COL_TASKS, id, { startDate: newStart, endDate: autoEnd, updatedAt: Date.now() })];
+                if (autoEnd) {
+                  ops = ops.concat(buildCascadedTaskDateUpdates(selectedHireId, wk, autoEnd));
+                }
+                run(Promise.all(ops));
               }
             });
             dateBox.appendChild(h('div', { class: 'flex items-center gap-1 text-[11px] text-base-content/60' },
@@ -719,13 +804,12 @@
         });
         var defaultWk = selectedFilter === 'all' ? (maxW + 1) : Number(selectedFilter);
         var wkVal = (taskData && taskData.week) || defaultWk;
-        var currentHire = hiresMap[selectedHireId] || {};
-        var autoRange = calcWeekRangeFromHireStart(currentHire.startDate, wkVal);
+        var autoRange = calcDefaultRangeForTargetWeek(selectedHireId, wkVal);
 
         taskWeekInput.value = wkVal;
         taskTimelineInput.value = (taskData && taskData.timeline) || ('Week ' + wkVal);
-        taskStartDateInput.value = (taskData && taskData.startDate !== undefined) ? taskData.startDate : autoRange.startDate;
-        taskEndDateInput.value = (taskData && taskData.endDate !== undefined) ? taskData.endDate : autoRange.endDate;
+        taskStartDateInput.value = (taskData && taskData.startDate) ? taskData.startDate : autoRange.startDate;
+        taskEndDateInput.value = (taskData && taskData.endDate) ? taskData.endDate : autoRange.endDate;
         taskStatusInput.value = (taskData && TASK_STATUS_META[taskData.status] ? taskData.status : 'pending');
         taskTitleInput.value = (taskData && (taskData.phase || taskData.title)) || '';
         taskTopicsInput.value = (taskData && (taskData.keyTopics || taskData.traineeNote)) || '';
@@ -878,6 +962,18 @@
         taskStartDateInput.addEventListener('change', syncModalWorkEndDate);
         taskStartDateInput.addEventListener('input', syncModalWorkEndDate);
 
+        // 當在新增視窗改變「週期順序 (Week N)」時，自動根據上一週延伸計算預設起訖日
+        taskWeekInput.addEventListener('change', function () {
+          if (editingTaskId || !selectedHireId) return;
+          var wk = Math.max(1, Math.min(52, Number(taskWeekInput.value) || 1));
+          var r = calcDefaultRangeForTargetWeek(selectedHireId, wk);
+          if (r.startDate) taskStartDateInput.value = r.startDate;
+          if (r.endDate) taskEndDateInput.value = r.endDate;
+          if (/^Week\s+\d+$/i.test(taskTimelineInput.value.trim())) {
+            taskTimelineInput.value = 'Week ' + wk;
+          }
+        });
+
         taskModalCancel.addEventListener('click', function () {
           taskModal.close();
         });
@@ -889,6 +985,9 @@
           var timeline = taskTimelineInput.value.trim().slice(0, 120);
           var startDate = taskStartDateInput.value.trim().slice(0, 30);
           var endDate = taskEndDateInput.value.trim().slice(0, 30);
+          if (startDate && !endDate) {
+            endDate = calcDefaultWorkEndDate(startDate);
+          }
           var st = taskStatusInput.value || 'pending';
           var phase = taskTitleInput.value.trim().slice(0, 200);
           var topics = taskTopicsInput.value.trim().slice(0, 4000);
@@ -918,7 +1017,11 @@
             payload.createdAt = Date.now();
           }
           taskModal.close();
-          run(sync.save(COL_TASKS, id, payload));
+          var ops = [sync.save(COL_TASKS, id, payload)];
+          if (endDate) {
+            ops = ops.concat(buildCascadedTaskDateUpdates(selectedHireId, wk, endDate));
+          }
+          run(Promise.all(ops));
         });
 
         editReviewBtn.addEventListener('click', function () {
