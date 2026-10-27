@@ -121,10 +121,21 @@
       <div id="workspace" class="space-y-5" hidden>
         <!-- 篩選列與新增按鈕 -->
         <div class="flex items-center justify-between gap-2 flex-wrap">
-          <div id="weekTabs" role="tablist" class="tabs tabs-box bg-base-200 p-1 flex-wrap"></div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <div id="weekTabs" role="tablist" class="tabs tabs-box bg-base-200 p-1 flex-wrap"></div>
+            <button id="quickAddCycleBtn" type="button" class="btn btn-xs btn-ghost text-primary" hidden>
+              <i class="fa-solid fa-plus" aria-hidden="true"></i><span data-i18n-zh="新增週期" data-i18n-en="Add Cycle">新增週期</span>
+            </button>
+            <button id="deleteCycleBtn" type="button" class="btn btn-xs btn-ghost text-error" hidden>
+              <i class="fa-regular fa-trash-can" aria-hidden="true"></i><span data-i18n-zh="刪除此週期" data-i18n-en="Delete Cycle">刪除此週期</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button id="autoDateBtn" type="button" class="btn btn-sm btn-soft btn-secondary" hidden>
+              <i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span data-i18n-zh="依到職日推算各週日期" data-i18n-en="Auto-Fill Dates from Start Date">依到職日推算各週日期</span>
+            </button>
             <button id="addTaskBtn" type="button" class="btn btn-sm btn-primary" hidden>
-              <i class="fa-solid fa-plus" aria-hidden="true"></i><span data-i18n-zh="新增讀書階段項目" data-i18n-en="Add Study Stage">新增讀書階段項目</span>
+              <i class="fa-solid fa-plus" aria-hidden="true"></i><span data-i18n-zh="新增週期 / 階段" data-i18n-en="Add Cycle / Stage">新增週期 / 階段</span>
             </button>
           </div>
         </div>
@@ -146,12 +157,12 @@
               <table class="table table-sm w-full align-top">
                 <thead class="bg-base-200/70 text-xs">
                   <tr>
-                    <th class="w-28">Timeline</th>
+                    <th class="w-48">Timeline / Date Range</th>
                     <th class="w-40">Phase / Domain</th>
                     <th class="min-w-64">Key Topics &amp; Hands-on Tasks</th>
                     <th class="w-36">Resources &amp; Format</th>
                     <th class="w-44">Remarks / Milestones</th>
-                    <th class="w-36 text-center">Status</th>
+                    <th class="w-36 text-center">Status &amp; Actions</th>
                   </tr>
                 </thead>
                 <tbody id="taskTableBody"></tbody>
@@ -260,12 +271,12 @@
           <form id="taskForm" class="space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <label class="form-control w-full">
-                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="階段順序 (1~52) *" data-i18n-en="Stage Order (1~52) *">階段順序 (1~52) *</span></div>
+                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="週期順序 (1~52) *" data-i18n-en="Cycle Order (1~52) *">週期順序 (1~52) *</span></div>
                 <input id="taskWeekInput" type="number" min="1" max="52" class="input input-bordered input-sm w-full" required>
               </label>
               <label class="form-control w-full">
-                <div class="label py-1"><span class="label-text text-sm">Timeline *</span></div>
-                <input id="taskTimelineInput" type="text" class="input input-bordered input-sm w-full" required placeholder="例如：Week 1 (W1 [11/2 ~])" data-i18n-placeholder-zh="例如：Week 1 (W1 [11/2 ~])" data-i18n-placeholder-en="e.g., Week 1 (W1 [11/2 ~])">
+                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="週期名稱 (Timeline) *" data-i18n-en="Cycle Label (Timeline) *">週期名稱 (Timeline) *</span></div>
+                <input id="taskTimelineInput" type="text" class="input input-bordered input-sm w-full" required placeholder="例如：Week 1" data-i18n-placeholder-zh="例如：Week 1" data-i18n-placeholder-en="e.g., Week 1">
               </label>
               <label class="form-control w-full">
                 <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="Status 狀態" data-i18n-en="Status">Status 狀態</span></div>
@@ -274,6 +285,16 @@
                   <option value="completed">✅ Completed</option>
                   <option value="final_eval">🏁 Final Evaluation</option>
                 </select>
+              </label>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="form-control w-full">
+                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="開始日期 (Start Date)" data-i18n-en="Start Date">開始日期 (Start Date)</span></div>
+                <input id="taskStartDateInput" type="date" class="input input-bordered input-sm w-full">
+              </label>
+              <label class="form-control w-full">
+                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="結束日期 (End Date)" data-i18n-en="End Date">結束日期 (End Date)</span></div>
+                <input id="taskEndDateInput" type="date" class="input input-bordered input-sm w-full">
               </label>
             </div>
             <label class="form-control w-full">

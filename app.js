@@ -50,6 +50,27 @@
     return null;
   }
 
+  function addDaysIso(baseDateStr, daysToAdd) {
+    if (!baseDateStr) return '';
+    var parts = String(baseDateStr).split('-');
+    if (parts.length !== 3) return '';
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    if (isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + daysToAdd);
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function calcWeekRangeFromHireStart(hireStartDate, weekOrder) {
+    if (!hireStartDate) return { startDate: '', endDate: '' };
+    var idx = Math.max(0, (Number(weekOrder) || 1) - 1);
+    var s = addDaysIso(hireStartDate, idx * 7);
+    var e = addDaysIso(hireStartDate, idx * 7 + 4);
+    return { startDate: s, endDate: e };
+  }
+
   window.App = {
     mount: function (root, ctx) {
       var $ = function (id) { return root.querySelector('#' + id); };
@@ -109,6 +130,9 @@
       var infoLatestWeek = $('infoLatestWeek');
 
       var weekTabs = $('weekTabs');
+      var quickAddCycleBtn = $('quickAddCycleBtn');
+      var deleteCycleBtn = $('deleteCycleBtn');
+      var autoDateBtn = $('autoDateBtn');
       var addTaskBtn = $('addTaskBtn');
       var weekTaskTitle = $('weekTaskTitle');
       var weekProgressBadge = $('weekProgressBadge');
@@ -144,6 +168,8 @@
       var taskForm = $('taskForm');
       var taskWeekInput = $('taskWeekInput');
       var taskTimelineInput = $('taskTimelineInput');
+      var taskStartDateInput = $('taskStartDateInput');
+      var taskEndDateInput = $('taskEndDateInput');
       var taskStatusInput = $('taskStatusInput');
       var taskTitleInput = $('taskTitleInput');
       var taskTopicsInput = $('taskTopicsInput');
@@ -242,20 +268,24 @@
         return weeks.map(function (w) { return stageMap[w]; });
       }
 
-      function applyCurriculumTemplateToHire(hireId) {
+      function applyCurriculumTemplateToHire(hireId, hireStartDate) {
         var tpls = getSortedTemplates();
         if (!tpls.length) {
           showErr(new Error(i18n.t('目前資料庫中尚無預設課綱範本（/data/templates）', 'No default curriculum template found in database (/data/templates)')));
           return Promise.resolve();
         }
+        var baseDate = hireStartDate || (hiresMap[hireId] && hiresMap[hireId].startDate) || '';
         var now = Date.now();
         var promises = tpls.map(function (tpl, idx) {
           var taskId = sync.newId();
           var wk = Number(tpl.week) || (idx + 1);
+          var range = calcWeekRangeFromHireStart(baseDate, wk);
           return sync.save(COL_TASKS, taskId, {
             hireId: hireId,
             week: wk,
             timeline: tpl.timeline || ('Week ' + wk),
+            startDate: range.startDate || '',
+            endDate: range.endDate || '',
             phase: tpl.phase || '',
             title: tpl.phase || '',
             keyTopics: tpl.keyTopics || '',
@@ -386,6 +416,16 @@
           weekTabs.appendChild(tabBtn);
         });
 
+        if (canWrite) {
+          quickAddCycleBtn.hidden = false;
+          autoDateBtn.hidden = !allTasks.length;
+          deleteCycleBtn.hidden = (selectedFilter === 'all');
+        } else {
+          quickAddCycleBtn.hidden = true;
+          autoDateBtn.hidden = true;
+          deleteCycleBtn.hidden = true;
+        }
+
         // 渲染 6 欄讀書計畫表格
         renderStudyPlanTable(allTasks, reviewsByWeek);
 
@@ -437,9 +477,44 @@
           var stKey = TASK_STATUS_META[t.status] ? t.status : 'pending';
           var stMeta = TASK_STATUS_META[stKey];
 
-          // 1. Timeline
+          // 1. Timeline + 內嵌時間範圍 (Start Date ~ End Date)
           var timelineText = t.timeline || ('Week ' + wk);
-          var tdTimeline = h('td', { class: 'font-semibold text-xs whitespace-pre-line align-top' }, timelineText);
+          var tdTimeline = h('td', { class: 'align-top space-y-1.5' });
+          tdTimeline.appendChild(h('div', { class: 'font-semibold text-xs whitespace-pre-line', text: timelineText }));
+
+          if (canWrite) {
+            var dateBox = h('div', { class: 'space-y-1 pt-0.5' });
+            var startInput = h('input', {
+              type: 'date',
+              class: 'input input-bordered input-xs w-full text-xs',
+              value: t.startDate || '',
+              title: i18n.t('開始日期', 'Start Date'),
+              onchange: function (ev) {
+                run(sync.save(COL_TASKS, id, { startDate: ev.target.value || '', updatedAt: Date.now() }));
+              }
+            });
+            var endInput = h('input', {
+              type: 'date',
+              class: 'input input-bordered input-xs w-full text-xs',
+              value: t.endDate || '',
+              title: i18n.t('結束日期', 'End Date'),
+              onchange: function (ev) {
+                run(sync.save(COL_TASKS, id, { endDate: ev.target.value || '', updatedAt: Date.now() }));
+              }
+            });
+            dateBox.appendChild(h('div', { class: 'flex items-center gap-1 text-[11px] text-base-content/60' },
+              h('span', { class: 'w-7 shrink-0', text: i18n.t('起', 'From') }),
+              startInput
+            ));
+            dateBox.appendChild(h('div', { class: 'flex items-center gap-1 text-[11px] text-base-content/60' },
+              h('span', { class: 'w-7 shrink-0', text: i18n.t('迄', 'To') }),
+              endInput
+            ));
+            tdTimeline.appendChild(dateBox);
+          } else if (t.startDate || t.endDate) {
+            var rangeStr = (t.startDate || '?') + ' ~ ' + (t.endDate || '?');
+            tdTimeline.appendChild(h('div', { class: 'badge badge-ghost badge-xs font-normal', text: rangeStr }));
+          }
 
           // 2. Phase / Domain
           var phaseText = t.phase || t.title || i18n.t('未命名階段', 'Untitled Stage');
@@ -598,13 +673,23 @@
       function openTaskModal(taskId, taskData) {
         editingTaskId = taskId || null;
         taskModalTitle.textContent = editingTaskId
-          ? i18n.t('編輯讀書階段項目', 'Edit Study Stage')
-          : i18n.t('新增讀書階段項目', 'Add Study Stage');
-        var defaultWk = selectedFilter === 'all'
-          ? (getHireTasks(selectedHireId).length + 1)
-          : Number(selectedFilter);
-        taskWeekInput.value = (taskData && taskData.week) || defaultWk;
-        taskTimelineInput.value = (taskData && taskData.timeline) || ('Week ' + defaultWk);
+          ? i18n.t('編輯讀書週期 / 階段', 'Edit Cycle / Stage')
+          : i18n.t('新增讀書週期 / 階段', 'Add Cycle / Stage');
+        var allTasks = getHireTasks(selectedHireId);
+        var maxW = 0;
+        allTasks.forEach(function (item) {
+          var w = Number(item.data.week) || 1;
+          if (w > maxW) maxW = w;
+        });
+        var defaultWk = selectedFilter === 'all' ? (maxW + 1) : Number(selectedFilter);
+        var wkVal = (taskData && taskData.week) || defaultWk;
+        var currentHire = hiresMap[selectedHireId] || {};
+        var autoRange = calcWeekRangeFromHireStart(currentHire.startDate, wkVal);
+
+        taskWeekInput.value = wkVal;
+        taskTimelineInput.value = (taskData && taskData.timeline) || ('Week ' + wkVal);
+        taskStartDateInput.value = (taskData && taskData.startDate !== undefined) ? taskData.startDate : autoRange.startDate;
+        taskEndDateInput.value = (taskData && taskData.endDate !== undefined) ? taskData.endDate : autoRange.endDate;
         taskStatusInput.value = (taskData && TASK_STATUS_META[taskData.status] ? taskData.status : 'pending');
         taskTitleInput.value = (taskData && (taskData.phase || taskData.title)) || '';
         taskTopicsInput.value = (taskData && (taskData.keyTopics || taskData.traineeNote)) || '';
@@ -686,10 +771,61 @@
           run(
             sync.save(COL_HIRES, id, payload).then(function () {
               if (shouldSeed) {
-                return applyCurriculumTemplateToHire(id);
+                return applyCurriculumTemplateToHire(id, startDate);
               }
             })
           );
+        });
+
+        quickAddCycleBtn.addEventListener('click', function () {
+          if (!selectedHireId) return;
+          var savedFilter = selectedFilter;
+          selectedFilter = 'all';
+          openTaskModal(null, null);
+          selectedFilter = savedFilter;
+        });
+
+        deleteCycleBtn.addEventListener('click', function () {
+          if (!selectedHireId || selectedFilter === 'all') return;
+          var targetWk = Number(selectedFilter);
+          var wkTasks = getHireTasks(selectedHireId).filter(function (t) { return Number(t.data.week) === targetWk; });
+          var revs = getHireReviews(selectedHireId);
+          var wkRev = revs[targetWk];
+          var confirmMsg = i18n.t(
+            '確定要刪除整個週期（Stage / Week ' + targetWk + '，共 ' + wkTasks.length + ' 筆項目）及其 Mentor 評估紀錄嗎？',
+            'Delete entire cycle (Stage / Week ' + targetWk + ', ' + wkTasks.length + ' items) and its Mentor evaluation?'
+          );
+          if (!confirm(confirmMsg)) return;
+          var promises = wkTasks.map(function (t) { return sync.remove(COL_TASKS, t.id); });
+          if (wkRev) promises.push(sync.remove(COL_REVIEWS, wkRev.id));
+          selectedFilter = 'all';
+          run(Promise.all(promises));
+        });
+
+        autoDateBtn.addEventListener('click', function () {
+          if (!selectedHireId || !hiresMap[selectedHireId]) return;
+          var hr = hiresMap[selectedHireId];
+          var baseDate = hr.startDate || '';
+          if (!baseDate) {
+            baseDate = prompt(
+              i18n.t('請輸入新人的到職日（格式 YYYY-MM-DD），系統將自動推算各週期時間範圍：', 'Enter start date (YYYY-MM-DD) to auto-calculate weekly date ranges:'),
+              new Date().toISOString().slice(0, 10)
+            ) || '';
+            baseDate = baseDate.trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(baseDate)) return;
+            run(sync.save(COL_HIRES, selectedHireId, { startDate: baseDate, updatedAt: Date.now() }));
+          }
+          var allTasks = getHireTasks(selectedHireId);
+          var promises = allTasks.map(function (item) {
+            var wk = Number(item.data.week) || 1;
+            var r = calcWeekRangeFromHireStart(baseDate, wk);
+            return sync.save(COL_TASKS, item.id, {
+              startDate: r.startDate,
+              endDate: r.endDate,
+              updatedAt: Date.now()
+            });
+          });
+          run(Promise.all(promises));
         });
 
         addTaskBtn.addEventListener('click', function () {
@@ -706,6 +842,8 @@
           if (!selectedHireId) return;
           var wk = Math.max(1, Math.min(52, Number(taskWeekInput.value) || 1));
           var timeline = taskTimelineInput.value.trim().slice(0, 120);
+          var startDate = taskStartDateInput.value.trim().slice(0, 30);
+          var endDate = taskEndDateInput.value.trim().slice(0, 30);
           var st = taskStatusInput.value || 'pending';
           var phase = taskTitleInput.value.trim().slice(0, 200);
           var topics = taskTopicsInput.value.trim().slice(0, 4000);
@@ -719,6 +857,8 @@
             hireId: selectedHireId,
             week: wk,
             timeline: timeline,
+            startDate: startDate,
+            endDate: endDate,
             phase: phase,
             title: phase,
             keyTopics: topics,
