@@ -371,7 +371,11 @@
         var removePromise = Promise.resolve();
         if (overwriteExisting) {
           var oldTasks = getHireTasks(hireId);
+          var oldRevs = getHireReviews(hireId);
           var delOps = oldTasks.map(function (t) { return sync.remove(COL_TASKS, t.id); });
+          Object.keys(oldRevs).forEach(function (wkKey) {
+            delOps.push(sync.remove(COL_REVIEWS, oldRevs[wkKey].id));
+          });
           removePromise = Promise.all(delOps);
         }
         var baseDate = hireStartDate || (hiresMap[hireId] && hiresMap[hireId].startDate) || '';
@@ -971,22 +975,25 @@
         applyTemplateBtn.addEventListener('click', function () {
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
           var existingCount = getHireTasks(selectedHireId).length;
-          var msg = existingCount > 0
+          var existingRevCount = Object.keys(getHireReviews(selectedHireId)).length;
+          var msg = (existingCount > 0 || existingRevCount > 0)
             ? i18n.t(
-                '確定要「套用預設課綱範本並覆蓋當下資料」（目前共有 ' + existingCount + ' 筆階段項目將被覆蓋）嗎？',
-                'Apply default curriculum template and OVERWRITE current data (' + existingCount + ' stage(s) will be replaced)?'
+                '確定要「套用預設課綱範本並覆蓋當下資料」嗎？\n（目前共 ' + existingCount + ' 筆讀書階段與 ' + existingRevCount + ' 筆 Mentor 階段進度評估將一併重置）',
+                'Apply default curriculum template and OVERWRITE current data?\n(' + existingCount + ' stage(s) and ' + existingRevCount + ' Mentor checkpoint(s) will be reset)'
               )
             : i18n.t(
-                '確定要套用預設課綱範本並覆蓋當下資料嗎？',
-                'Apply default curriculum template and overwrite current data?'
+                '確定要套用預設課綱範本並重置 Mentor 階段進度評估嗎？',
+                'Apply default curriculum template and reset Mentor stage checkpoints?'
               );
           askConfirm(
             msg,
             function () {
               selectedFilter = 'all';
+              selectedReviewWeek = 1;
+              isEditingReview = false;
               run(applyCurriculumTemplateToHire(selectedHireId, null, true));
             },
-            { okLabel: i18n.t('套用並覆蓋', 'Apply & Overwrite') }
+            { okLabel: i18n.t('套用並重置', 'Apply & Reset') }
           );
         });
 
