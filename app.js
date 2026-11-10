@@ -537,7 +537,7 @@
 
         // 統計資訊
         infoHireName.textContent = currentHire.name || '-';
-        infoHireRole.textContent = currentHire.roleTitle || i18n.t('未填寫部門職稱', 'Role not specified');
+        infoHireRole.textContent = currentHire.roleTitle || i18n.t('未選擇部門', 'Department not set');
         infoMentor.textContent = currentHire.mentor || '-';
         infoStartDate.textContent = currentHire.startDate
           ? (i18n.t('到職日：', 'Start: ') + currentHire.startDate)
@@ -929,7 +929,8 @@
           : i18n.t('新增新人', 'Add New Hire');
         hireNameInput.value = (hireData && hireData.name) || '';
         hireMentorInput.value = (hireData && hireData.mentor) || (ctx.session && ctx.session.name) || '';
-        hireRoleInput.value = (hireData && hireData.roleTitle) || '';
+        var savedDept = (hireData && hireData.roleTitle) || '';
+        hireRoleInput.value = (savedDept === 'Exchange' || savedDept === 'Teams' || savedDept === 'ODSP') ? savedDept : 'Teams';
         hireDateInput.value = (hireData && hireData.startDate) || new Date().toISOString().slice(0, 10);
         hireSeedWrap.hidden = !!editingHireId;
         hireSeedCheckbox.checked = !editingHireId;

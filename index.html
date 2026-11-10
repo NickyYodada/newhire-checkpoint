@@ -88,7 +88,7 @@
           <!-- 新人詳細資訊與總體統計 -->
           <div id="hireSummary" class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-base-200" hidden>
             <div class="bg-base-200/60 rounded-box p-3">
-              <div class="text-xs text-base-content/60" data-i18n-zh="新人 / 部門職稱" data-i18n-en="New Hire / Role">新人 / 部門職稱</div>
+              <div class="text-xs text-base-content/60" data-i18n-zh="新人 / 部門" data-i18n-en="New Hire / Department">新人 / 部門</div>
               <div id="infoHireName" class="font-semibold text-base mt-0.5">-</div>
               <div id="infoHireRole" class="text-xs text-base-content/70">-</div>
             </div>
@@ -247,8 +247,12 @@
             </label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label class="form-control w-full">
-                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="部門 / 職稱" data-i18n-en="Team / Role Title">部門 / 職稱</span></div>
-                <input id="hireRoleInput" type="text" class="input input-bordered input-sm w-full" placeholder="例如：Support Engineer" data-i18n-placeholder-zh="例如：Support Engineer" data-i18n-placeholder-en="e.g., Support Engineer">
+                <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="部門" data-i18n-en="Department">部門</span></div>
+                <select id="hireRoleInput" class="select select-bordered select-sm w-full">
+                  <option value="Exchange">Exchange</option>
+                  <option value="Teams">Teams</option>
+                  <option value="ODSP">ODSP</option>
+                </select>
               </label>
               <label class="form-control w-full">
                 <div class="label py-1"><span class="label-text text-sm" data-i18n-zh="到職日期" data-i18n-en="Start Date">到職日期</span></div>
