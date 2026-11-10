@@ -730,9 +730,16 @@
           var stMeta = TASK_STATUS_META[stKey];
 
           // 1. Timeline + 內嵌時間範圍 (Start Date ~ End Date)
-          var timelineText = t.timeline || ('Week ' + wk);
+          var rawLines = String(t.timeline || ('Week ' + wk)).split('\n');
+          var mainWeekLabel = (rawLines[0] || ('Week ' + wk)).trim();
+          var subWeekLabel = rawLines.slice(1).join('\n').trim();
           var tdTimeline = h('td', { class: 'align-top space-y-1.5' });
-          tdTimeline.appendChild(h('div', { class: 'font-semibold text-xs whitespace-pre-line', text: timelineText }));
+          tdTimeline.appendChild(h('div', {},
+            h('span', { class: 'badge badge-primary font-semibold px-3 py-2.5 text-xs rounded-lg', text: mainWeekLabel })
+          ));
+          if (subWeekLabel) {
+            tdTimeline.appendChild(h('div', { class: 'text-[11px] text-base-content/70 whitespace-pre-line', text: subWeekLabel }));
+          }
 
           if (canWrite) {
             var dateBox = h('div', { class: 'space-y-1 pt-0.5' });
@@ -978,9 +985,18 @@
         list.forEach(function (tpl) {
           var id = tpl._id;
           var wk = Number(tpl.week) || Number(tpl.order) || 1;
+          var tplLines = String(tpl.timeline || ('Week ' + wk)).split('\n');
+          var tplMainLabel = (tplLines[0] || ('Week ' + wk)).trim();
+          var tplSubLabel = tplLines.slice(1).join('\n').trim();
+          var tdTplTimeline = h('td', { class: 'align-top space-y-1' },
+            h('span', { class: 'badge badge-primary badge-sm font-semibold px-2.5 py-2 rounded-lg', text: tplMainLabel })
+          );
+          if (tplSubLabel) {
+            tdTplTimeline.appendChild(h('div', { class: 'text-[11px] text-base-content/70 whitespace-pre-line', text: tplSubLabel }));
+          }
           var tr = h('tr', { class: 'hover:bg-base-200/40' },
             h('td', { class: 'font-semibold align-top', text: String(wk) }),
-            h('td', { class: 'whitespace-pre-line align-top font-medium', text: tpl.timeline || ('Week ' + wk) }),
+            tdTplTimeline,
             h('td', { class: 'align-top font-semibold', text: tpl.phase || '' }),
             h('td', { class: 'whitespace-pre-wrap align-top text-base-content/80', text: tpl.keyTopics || '' }),
             h('td', { class: 'whitespace-pre-wrap align-top text-base-content/80', text: tpl.resources || '-' }),
