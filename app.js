@@ -145,6 +145,7 @@
       var refreshBtn = $('refreshBtn');
       var addHireBtn = $('addHireBtn');
       var hireSelect = $('hireSelect');
+      var hireTplSelect = $('hireTplSelect');
       var hireActions = $('hireActions');
       var applyTemplateBtn = $('applyTemplateBtn');
       var manageTemplateBtn = $('manageTemplateBtn');
@@ -195,6 +196,7 @@
       var hireDateInput = $('hireDateInput');
       var hireSeedWrap = $('hireSeedWrap');
       var hireSeedCheckbox = $('hireSeedCheckbox');
+      var hireModalTplSelect = $('hireModalTplSelect');
       var hireModalCancel = $('hireModalCancel');
 
       var taskModal = $('taskModal');
@@ -213,6 +215,10 @@
       var taskModalCancel = $('taskModalCancel');
 
       var tplListModal = $('tplListModal');
+      var tplSetSelect = $('tplSetSelect');
+      var deleteTplSetBtn = $('deleteTplSetBtn');
+      var newTplSetNameInput = $('newTplSetNameInput');
+      var createTplSetBtn = $('createTplSetBtn');
       var saveCurrentAsTplBtn = $('saveCurrentAsTplBtn');
       var addTplItemBtn = $('addTplItemBtn');
       var tplTableBody = $('tplTableBody');
@@ -229,6 +235,8 @@
       var tplFormCancelBtn = $('tplFormCancelBtn');
       var tplListCloseBtn = $('tplListCloseBtn');
       var editingTplId = null;
+      var activeTplSetName = 'Teams';
+      var customTplSetNames = ['Teams'];
 
       var confirmModal = $('confirmModal');
       var confirmModalMsg = $('confirmModalMsg');
@@ -296,21 +304,60 @@
         });
       }
 
-      function getSortedTemplates() {
+      function getTemplateNames() {
+        var nameSet = { Teams: true };
+        customTplSetNames.forEach(function (n) { if (n) nameSet[n] = true; });
+        Object.keys(templatesMap).forEach(function (k) {
+          var item = templatesMap[k];
+          if (item && typeof item === 'object') {
+            var tName = String(item.templateName || 'Teams').trim() || 'Teams';
+            nameSet[tName] = true;
+          }
+        });
+        var names = Object.keys(nameSet);
+        names.sort(function (a, b) {
+          if (a === 'Teams') return -1;
+          if (b === 'Teams') return 1;
+          return a.localeCompare(b);
+        });
+        return names;
+      }
+
+      function getSortedTemplates(tplNameFilter) {
+        var targetName = String(tplNameFilter || activeTplSetName || 'Teams').trim() || 'Teams';
         return Object.keys(templatesMap).map(function (k) {
           var item = templatesMap[k];
-          return item ? Object.assign({ _id: k }, item) : null;
+          if (!item || typeof item !== 'object') return null;
+          var itemTplName = String(item.templateName || 'Teams').trim() || 'Teams';
+          if (itemTplName !== targetName) return null;
+          return Object.assign({ _id: k, templateName: itemTplName }, item);
         }).filter(Boolean).sort(function (a, b) {
           return (Number(a.order) || Number(a.week) || 0) - (Number(b.order) || Number(b.week) || 0);
         });
       }
 
-      function getHireTasks(hireId) {
+      function getActiveTemplateForHire(hireId) {
+        var hr = hiresMap[hireId];
+        var names = getTemplateNames();
+        if (hr && hr.selectedTemplate && names.indexOf(hr.selectedTemplate) !== -1) {
+          return hr.selectedTemplate;
+        }
+        if (hr && hr.roleTitle && names.indexOf(hr.roleTitle) !== -1) {
+          return hr.roleTitle;
+        }
+        return names[0] || 'Teams';
+      }
+
+      function getHireTasks(hireId, tplNameFilter) {
+        var targetTpl = tplNameFilter || getActiveTemplateForHire(hireId);
         var list = [];
         Object.keys(tasksMap).forEach(function (id) {
           var t = tasksMap[id];
           if (t && t.hireId === hireId) {
-            list.push({ id: id, data: t });
+            var taskTpl = String(t.templateName || 'Teams').trim() || 'Teams';
+            if (taskTpl === targetTpl) {
+              list.push({ id: id, data: t });
+            }
           }
         });
         list.sort(function (a, b) {
@@ -322,12 +369,16 @@
         return list;
       }
 
-      function getHireReviews(hireId) {
+      function getHireReviews(hireId, tplNameFilter) {
+        var targetTpl = tplNameFilter || getActiveTemplateForHire(hireId);
         var mapByWeek = {};
         Object.keys(reviewsMap).forEach(function (id) {
           var r = reviewsMap[id];
           if (r && r.hireId === hireId && r.week) {
-            mapByWeek[Number(r.week)] = { id: id, data: r };
+            var revTpl = String(r.templateName || 'Teams').trim() || 'Teams';
+            if (revTpl === targetTpl) {
+              mapByWeek[Number(r.week)] = { id: id, data: r };
+            }
           }
         });
         return mapByWeek;
@@ -362,16 +413,17 @@
         return weeks.map(function (w) { return stageMap[w]; });
       }
 
-      function applyCurriculumTemplateToHire(hireId, hireStartDate, overwriteExisting) {
-        var tpls = getSortedTemplates();
+      function applyCurriculumTemplateToHire(hireId, hireStartDate, overwriteExisting, tplNameOverride) {
+        var targetTpl = String(tplNameOverride || getActiveTemplateForHire(hireId) || 'Teams').trim() || 'Teams';
+        var tpls = getSortedTemplates(targetTpl);
         if (!tpls.length) {
-          showErr(new Error(i18n.t('目前資料庫中尚無預設課綱範本（/data/templates）', 'No default curriculum template found in database (/data/templates)')));
+          showErr(new Error(i18n.t('範本「' + targetTpl + '」目前尚無任何階段項目，請先至「編輯課綱範本」新增。', 'Template "' + targetTpl + '" has no stages yet. Please add stages in Edit Curriculum Template first.')));
           return Promise.resolve();
         }
         var removePromise = Promise.resolve();
         if (overwriteExisting) {
-          var oldTasks = getHireTasks(hireId);
-          var oldRevs = getHireReviews(hireId);
+          var oldTasks = getHireTasks(hireId, targetTpl);
+          var oldRevs = getHireReviews(hireId, targetTpl);
           var delOps = oldTasks.map(function (t) { return sync.remove(COL_TASKS, t.id); });
           Object.keys(oldRevs).forEach(function (wkKey) {
             delOps.push(sync.remove(COL_REVIEWS, oldRevs[wkKey].id));
@@ -387,6 +439,7 @@
             var range = calcWeekRangeFromHireStart(baseDate, wk);
             return sync.save(COL_TASKS, taskId, {
               hireId: hireId,
+              templateName: targetTpl,
               week: wk,
               timeline: tpl.timeline || ('Week ' + wk),
               startDate: range.startDate || '',
@@ -509,6 +562,13 @@
         if (!hireIds.length) {
           hireSelect.appendChild(h('option', { value: '', text: i18n.t('尚無新人資料', 'No new hires yet') }));
           hireSelect.disabled = true;
+          if (hireTplSelect) {
+            hireTplSelect.textContent = '';
+            getTemplateNames().forEach(function (tName) {
+              hireTplSelect.appendChild(h('option', { value: tName, text: tName }));
+            });
+            hireTplSelect.disabled = true;
+          }
           hireActions.hidden = true;
           hireSummary.hidden = true;
           emptyHireState.hidden = false;
@@ -531,8 +591,18 @@
         });
 
         var currentHire = hiresMap[selectedHireId];
-        var allTasks = getHireTasks(selectedHireId);
-        var reviewsByWeek = getHireReviews(selectedHireId);
+        var activeHireTpl = getActiveTemplateForHire(selectedHireId);
+        if (hireTplSelect) {
+          hireTplSelect.disabled = false;
+          hireTplSelect.textContent = '';
+          getTemplateNames().forEach(function (tName) {
+            var opt = h('option', { value: tName, text: tName });
+            if (tName === activeHireTpl) opt.selected = true;
+            hireTplSelect.appendChild(opt);
+          });
+        }
+        var allTasks = getHireTasks(selectedHireId, activeHireTpl);
+        var reviewsByWeek = getHireReviews(selectedHireId, activeHireTpl);
         var stages = getStageListForHire(selectedHireId, allTasks, reviewsByWeek);
 
         // 統計資訊
@@ -854,10 +924,10 @@
 
       function openTplForm(tplId, tplData) {
         editingTplId = tplId || null;
-        tplFormTitle.textContent = editingTplId
+        tplFormTitle.textContent = (editingTplId
           ? i18n.t('編輯範本階段', 'Edit Template Stage')
-          : i18n.t('新增範本階段', 'Add Template Stage');
-        var list = getSortedTemplates();
+          : i18n.t('新增範本階段', 'Add Template Stage')) + ' [' + activeTplSetName + ']';
+        var list = getSortedTemplates(activeTplSetName);
         var nextWk = list.length + 1;
         var wk = (tplData && (tplData.week || tplData.order)) || nextWk;
         tplWeekInput.value = wk;
@@ -874,16 +944,32 @@
 
       function renderTemplateModalList() {
         if (!tplTableBody) return;
+        var tplNames = getTemplateNames();
+        if (tplNames.indexOf(activeTplSetName) === -1) {
+          activeTplSetName = tplNames[0] || 'Teams';
+        }
+        if (tplSetSelect) {
+          tplSetSelect.textContent = '';
+          tplNames.forEach(function (n) {
+            var count = getSortedTemplates(n).length;
+            var opt = h('option', { value: n, text: n + ' (' + count + ')' });
+            if (n === activeTplSetName) opt.selected = true;
+            tplSetSelect.appendChild(opt);
+          });
+        }
+        if (deleteTplSetBtn) {
+          deleteTplSetBtn.hidden = (tplNames.length <= 1);
+        }
         if (saveCurrentAsTplBtn) {
           saveCurrentAsTplBtn.hidden = !(selectedHireId && hiresMap[selectedHireId] && getHireTasks(selectedHireId).length > 0);
         }
         tplTableBody.textContent = '';
-        var list = getSortedTemplates();
+        var list = getSortedTemplates(activeTplSetName);
         if (!list.length) {
           tplTableBody.appendChild(
             h('tr', {},
               h('td', { colspan: '7', class: 'text-center py-6 text-base-content/60' },
-                i18n.t('目前沒有任何範本階段，請點選右上角「新增範本階段」建立。', 'No template stages yet. Click "Add Template Stage" above.')
+                i18n.t('範本「' + activeTplSetName + '」目前沒有任何階段，請點選右上角「新增範本階段」建立。', 'No stages in template "' + activeTplSetName + '" yet. Click "Add Template Stage" above.')
               )
             )
           );
@@ -913,7 +999,7 @@
                   title: i18n.t('刪除此範本階段', 'Delete template stage'),
                   onclick: function () {
                     askConfirm(
-                      i18n.t('確定要從預設課綱範本刪除「' + (tpl.phase || '') + '」嗎？', 'Remove "' + (tpl.phase || '') + '" from default curriculum template?'),
+                      i18n.t('確定要從「' + activeTplSetName + '」課綱範本刪除「' + (tpl.phase || '') + '」嗎？', 'Remove "' + (tpl.phase || '') + '" from "' + activeTplSetName + '" template?'),
                       function () { run(sync.remove(COL_TEMPLATES, id)); },
                       { danger: true }
                     );
@@ -937,6 +1023,17 @@
         hireDateInput.value = (hireData && hireData.startDate) || new Date().toISOString().slice(0, 10);
         hireSeedWrap.hidden = !!editingHireId;
         hireSeedCheckbox.checked = !editingHireId;
+        if (hireModalTplSelect) {
+          hireModalTplSelect.textContent = '';
+          var tplNames = getTemplateNames();
+          var defaultTpl = (hireData && hireData.selectedTemplate) || (tplNames.indexOf(hireRoleInput.value) !== -1 ? hireRoleInput.value : (tplNames[0] || 'Teams'));
+          tplNames.forEach(function (n) {
+            var opt = h('option', { value: n, text: n + ' (' + getSortedTemplates(n).length + i18n.t(' 階段)', ' stages)') });
+            if (n === defaultTpl) opt.selected = true;
+            hireModalTplSelect.appendChild(opt);
+          });
+          hireModalTplSelect.disabled = !hireSeedCheckbox.checked;
+        }
         hireModal.showModal();
       }
 
@@ -979,16 +1076,17 @@
 
         applyTemplateBtn.addEventListener('click', function () {
           if (!selectedHireId || !hiresMap[selectedHireId]) return;
-          var existingCount = getHireTasks(selectedHireId).length;
-          var existingRevCount = Object.keys(getHireReviews(selectedHireId)).length;
+          var targetTpl = getActiveTemplateForHire(selectedHireId);
+          var existingCount = getHireTasks(selectedHireId, targetTpl).length;
+          var existingRevCount = Object.keys(getHireReviews(selectedHireId, targetTpl)).length;
           var msg = (existingCount > 0 || existingRevCount > 0)
             ? i18n.t(
-                '確定要「套用預設課綱範本並覆蓋當下資料」嗎？\n（目前共 ' + existingCount + ' 筆讀書階段與 ' + existingRevCount + ' 筆 Mentor 階段進度評估將一併重置）',
-                'Apply default curriculum template and OVERWRITE current data?\n(' + existingCount + ' stage(s) and ' + existingRevCount + ' Mentor checkpoint(s) will be reset)'
+                '確定要套用「' + targetTpl + '」課綱範本並覆蓋當下資料嗎？\n（目前此範本下共 ' + existingCount + ' 筆讀書階段與 ' + existingRevCount + ' 筆 Mentor 階段進度評估將一併重置）',
+                'Apply "' + targetTpl + '" curriculum template and OVERWRITE current data?\n(' + existingCount + ' stage(s) and ' + existingRevCount + ' Mentor checkpoint(s) will be reset)'
               )
             : i18n.t(
-                '確定要套用預設課綱範本並重置 Mentor 階段進度評估嗎？',
-                'Apply default curriculum template and reset Mentor stage checkpoints?'
+                '確定要套用「' + targetTpl + '」課綱範本嗎？',
+                'Apply "' + targetTpl + '" curriculum template?'
               );
           askConfirm(
             msg,
@@ -996,7 +1094,7 @@
               selectedFilter = 'all';
               selectedReviewWeek = 1;
               isEditingReview = false;
-              run(applyCurriculumTemplateToHire(selectedHireId, null, true));
+              run(applyCurriculumTemplateToHire(selectedHireId, null, true, targetTpl));
             },
             { okLabel: i18n.t('套用並重置', 'Apply & Reset') }
           );
@@ -1005,9 +1103,58 @@
         manageTemplateBtn.addEventListener('click', function () {
           tplItemForm.hidden = true;
           editingTplId = null;
+          if (selectedHireId && hiresMap[selectedHireId]) {
+            activeTplSetName = getActiveTemplateForHire(selectedHireId);
+          }
           renderTemplateModalList();
           tplListModal.showModal();
         });
+
+        if (tplSetSelect) {
+          tplSetSelect.addEventListener('change', function () {
+            activeTplSetName = tplSetSelect.value || 'Teams';
+            tplItemForm.hidden = true;
+            editingTplId = null;
+            renderTemplateModalList();
+          });
+        }
+
+        if (createTplSetBtn && newTplSetNameInput) {
+          createTplSetBtn.addEventListener('click', function () {
+            var newName = newTplSetNameInput.value.trim().slice(0, 60);
+            if (!newName) return;
+            if (customTplSetNames.indexOf(newName) === -1) {
+              customTplSetNames.push(newName);
+            }
+            activeTplSetName = newName;
+            newTplSetNameInput.value = '';
+            renderTemplateModalList();
+            renderAll();
+            openTplForm(null, null);
+          });
+        }
+
+        if (deleteTplSetBtn) {
+          deleteTplSetBtn.addEventListener('click', function () {
+            var tplNames = getTemplateNames();
+            if (tplNames.length <= 1) return;
+            var targetSet = activeTplSetName;
+            var items = getSortedTemplates(targetSet);
+            askConfirm(
+              i18n.t('確定要刪除整個課綱範本「' + targetSet + '」（共 ' + items.length + ' 個階段）嗎？', 'Delete entire curriculum template "' + targetSet + '" (' + items.length + ' stages)?'),
+              function () {
+                customTplSetNames = customTplSetNames.filter(function (n) { return n !== targetSet; });
+                var delOps = items.map(function (it) { return sync.remove(COL_TEMPLATES, it._id); });
+                activeTplSetName = 'Teams';
+                run(Promise.all(delOps).then(function () {
+                  renderTemplateModalList();
+                  renderAll();
+                }));
+              },
+              { danger: true }
+            );
+          });
+        }
 
         tplListCloseBtn.addEventListener('click', function () {
           tplListModal.close();
@@ -1036,6 +1183,7 @@
 
           var id = editingTplId || ('tpl_' + sync.newId());
           var payload = {
+            templateName: activeTplSetName || 'Teams',
             order: wk,
             week: wk,
             timeline: timeline,
@@ -1059,20 +1207,23 @@
             showErr(new Error(i18n.t('目前選定的新人尚無任何課綱階段可存為範本。', 'Current new hire has no study stages to save as template.')));
             return;
           }
+          var targetSet = activeTplSetName || 'Teams';
           var confirmMsg = i18n.t(
-            '確定要將目前新人的 ' + currentTasks.length + ' 個階段覆蓋儲存為新的「預設課綱範本」嗎？',
-            'Overwrite the default curriculum template with the ' + currentTasks.length + ' stages from the current new hire?'
+            '確定要將目前新人的 ' + currentTasks.length + ' 個階段覆蓋儲存至「' + targetSet + '」課綱範本嗎？',
+            'Overwrite template "' + targetSet + '" with the ' + currentTasks.length + ' stages from the current new hire?'
           );
           askConfirm(confirmMsg, function () {
-            var removeOps = Object.keys(templatesMap).map(function (k) {
-              return sync.remove(COL_TEMPLATES, k);
+            var oldSetItems = getSortedTemplates(targetSet);
+            var removeOps = oldSetItems.map(function (it) {
+              return sync.remove(COL_TEMPLATES, it._id);
             });
             run(
               Promise.all(removeOps).then(function () {
                 var saveOps = currentTasks.map(function (item, idx) {
                   var t = item.data;
                   var wk = Number(t.week) || (idx + 1);
-                  return sync.save(COL_TEMPLATES, 'tpl_w' + (idx + 1) + '_' + sync.newId(), {
+                  return sync.save(COL_TEMPLATES, 'tpl_' + sync.newId(), {
+                    templateName: targetSet,
                     order: wk,
                     week: wk,
                     timeline: t.timeline || ('Week ' + wk),
@@ -1104,12 +1255,15 @@
             function () {
               var targetHireId = selectedHireId;
               var promises = [sync.remove(COL_HIRES, targetHireId)];
-              getHireTasks(targetHireId).forEach(function (t) {
-                promises.push(sync.remove(COL_TASKS, t.id));
+              Object.keys(tasksMap).forEach(function (tid) {
+                if (tasksMap[tid] && tasksMap[tid].hireId === targetHireId) {
+                  promises.push(sync.remove(COL_TASKS, tid));
+                }
               });
-              var revs = getHireReviews(targetHireId);
-              Object.keys(revs).forEach(function (w) {
-                promises.push(sync.remove(COL_REVIEWS, revs[w].id));
+              Object.keys(reviewsMap).forEach(function (rid) {
+                if (reviewsMap[rid] && reviewsMap[rid].hireId === targetHireId) {
+                  promises.push(sync.remove(COL_REVIEWS, rid));
+                }
               });
               selectedHireId = '';
               saveSelectedHirePref('');
@@ -1118,6 +1272,21 @@
             { danger: true }
           );
         });
+
+        if (hireSeedCheckbox && hireModalTplSelect) {
+          hireSeedCheckbox.addEventListener('change', function () {
+            hireModalTplSelect.disabled = !hireSeedCheckbox.checked;
+          });
+        }
+
+        if (hireRoleInput && hireModalTplSelect) {
+          hireRoleInput.addEventListener('change', function () {
+            var dept = hireRoleInput.value;
+            if (getTemplateNames().indexOf(dept) !== -1) {
+              hireModalTplSelect.value = dept;
+            }
+          });
+        }
 
         hireModalCancel.addEventListener('click', function () {
           hireModal.close();
@@ -1133,6 +1302,7 @@
 
           var isNew = !editingHireId;
           var shouldSeed = isNew && hireSeedCheckbox.checked;
+          var chosenTpl = (hireModalTplSelect && hireModalTplSelect.value) || 'Teams';
           var id = editingHireId || sync.newId();
           var payload = {
             name: name,
@@ -1143,6 +1313,7 @@
           };
           if (isNew) {
             payload.createdAt = Date.now();
+            payload.selectedTemplate = chosenTpl;
             selectedHireId = id;
             saveSelectedHirePref(id);
           }
@@ -1150,7 +1321,7 @@
           run(
             sync.save(COL_HIRES, id, payload).then(function () {
               if (shouldSeed) {
-                return applyCurriculumTemplateToHire(id, startDate);
+                return applyCurriculumTemplateToHire(id, startDate, false, chosenTpl);
               }
             })
           );
@@ -1262,8 +1433,10 @@
           if (!phase || !timeline) return;
 
           var id = editingTaskId || sync.newId();
+          var activeHireTpl = getActiveTemplateForHire(selectedHireId);
           var payload = {
             hireId: selectedHireId,
+            templateName: activeHireTpl,
             week: wk,
             timeline: timeline,
             startDate: startDate,
@@ -1312,11 +1485,14 @@
         reviewForm.addEventListener('submit', function (e) {
           e.preventDefault();
           if (!selectedHireId) return;
-          var revs = getHireReviews(selectedHireId);
+          var activeHireTpl = getActiveTemplateForHire(selectedHireId);
+          var revs = getHireReviews(selectedHireId, activeHireTpl);
           var existing = revs[selectedReviewWeek];
-          var id = existing ? existing.id : (selectedHireId + '_w' + selectedReviewWeek);
+          var safeTplSlug = activeHireTpl.replace(/[^A-Za-z0-9_-]/g, '_');
+          var id = existing ? existing.id : (selectedHireId + '_' + safeTplSlug + '_w' + selectedReviewWeek);
           var payload = {
             hireId: selectedHireId,
+            templateName: activeHireTpl,
             week: selectedReviewWeek,
             status: reviewStatusInput.value || 'on_track',
             mentorName: reviewMentorInput.value.trim().slice(0, 100),
@@ -1327,6 +1503,28 @@
           };
           isEditingReview = false;
           run(sync.save(COL_REVIEWS, id, payload));
+        });
+      }
+
+      if (hireTplSelect) {
+        hireTplSelect.addEventListener('change', function () {
+          if (!selectedHireId || !hiresMap[selectedHireId]) return;
+          var chosenTpl = hireTplSelect.value || 'Teams';
+          selectedFilter = 'all';
+          selectedReviewWeek = 1;
+          isEditingReview = false;
+          if (canWrite) {
+            run(
+              sync.save(COL_HIRES, selectedHireId, { selectedTemplate: chosenTpl, updatedAt: Date.now() }).then(function () {
+                if (getHireTasks(selectedHireId, chosenTpl).length === 0 && getSortedTemplates(chosenTpl).length > 0) {
+                  return applyCurriculumTemplateToHire(selectedHireId, null, false, chosenTpl);
+                }
+              })
+            );
+          } else {
+            hiresMap[selectedHireId].selectedTemplate = chosenTpl;
+            renderAll();
+          }
         });
       }
 

@@ -71,10 +71,14 @@
                 <i class="fa-solid fa-user-graduate text-primary mr-1" aria-hidden="true"></i><span data-i18n-zh="選擇新人：" data-i18n-en="New Hire:">選擇新人：</span>
               </label>
               <select id="hireSelect" class="select select-sm select-bordered flex-1 max-w-xs"></select>
+              <label for="hireTplSelect" class="text-sm font-medium whitespace-nowrap ml-2">
+                <i class="fa-solid fa-book-bookmark text-secondary mr-1" aria-hidden="true"></i><span data-i18n-zh="課綱範本：" data-i18n-en="Curriculum:">課綱範本：</span>
+              </label>
+              <select id="hireTplSelect" class="select select-sm select-bordered max-w-44"></select>
             </div>
             <div id="hireActions" class="flex items-center gap-1 flex-wrap" hidden>
               <button id="applyTemplateBtn" type="button" class="btn btn-xs btn-soft btn-primary">
-                <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span data-i18n-zh="套用預設課綱範本" data-i18n-en="Apply Default Curriculum">套用預設課綱範本</span>
+                <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span data-i18n-zh="套用所選課綱範本" data-i18n-en="Apply Selected Curriculum">套用所選課綱範本</span>
               </button>
               <button id="editHireBtn" type="button" class="btn btn-xs btn-ghost">
                 <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i><span data-i18n-zh="編輯新人" data-i18n-en="Edit Hire">編輯新人</span>
@@ -259,10 +263,13 @@
                 <input id="hireDateInput" type="date" class="input input-bordered input-sm w-full">
               </label>
             </div>
-            <label id="hireSeedWrap" class="label cursor-pointer justify-start gap-2 pt-2">
-              <input id="hireSeedCheckbox" type="checkbox" class="checkbox checkbox-sm checkbox-primary" checked>
-              <span class="label-text text-sm" data-i18n-zh="自動帶入預設讀書計畫課綱範本（5 個階段）" data-i18n-en="Auto-populate default curriculum template (5 stages)">自動帶入預設讀書計畫課綱範本（5 個階段）</span>
-            </label>
+            <div id="hireSeedWrap" class="space-y-2 pt-2">
+              <label class="label cursor-pointer justify-start gap-2 py-0">
+                <input id="hireSeedCheckbox" type="checkbox" class="checkbox checkbox-sm checkbox-primary" checked>
+                <span class="label-text text-sm" data-i18n-zh="自動帶入課綱範本：" data-i18n-en="Auto-populate curriculum template:">自動帶入課綱範本：</span>
+              </label>
+              <select id="hireModalTplSelect" class="select select-bordered select-sm w-full"></select>
+            </div>
             <div class="modal-action">
               <button id="hireModalCancel" type="button" class="btn btn-sm btn-ghost" data-i18n-zh="取消" data-i18n-en="Cancel">取消</button>
               <button type="submit" class="btn btn-sm btn-primary" data-i18n-zh="儲存" data-i18n-en="Save">儲存</button>
@@ -341,16 +348,33 @@
             <div>
               <h3 class="font-bold text-lg flex items-center gap-2">
                 <i class="fa-solid fa-sliders text-secondary" aria-hidden="true"></i>
-                <span data-i18n-zh="管理預設課綱範本" data-i18n-en="Manage Default Curriculum Template">管理預設課綱範本</span>
+                <span data-i18n-zh="管理課綱範本清單" data-i18n-en="Manage Curriculum Templates">管理課綱範本清單</span>
               </h3>
-              <p class="text-xs text-base-content/70 mt-0.5" data-i18n-zh="在此新增、編輯或刪除範本階段；日後新增新人或點選「套用預設課綱範本」時會自動帶入這份清單。" data-i18n-en="Add, edit, or delete template stages here. Applying the template will populate these stages for a new hire.">在此新增、編輯或刪除範本階段；日後新增新人或點選「套用預設課綱範本」時會自動帶入這份清單。</p>
+              <p class="text-xs text-base-content/70 mt-0.5" data-i18n-zh="可選擇不同範本（預設為 Teams）或建立新範本；新人可自由切換要顯示的範本內容。" data-i18n-en="Select or create curriculum templates (default: Teams). New hires can switch between templates.">可選擇不同範本（預設為 Teams）或建立新範本；新人可自由切換要顯示的範本內容。</p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
               <button id="saveCurrentAsTplBtn" type="button" class="btn btn-xs btn-soft">
-                <i class="fa-solid fa-file-import" aria-hidden="true"></i><span data-i18n-zh="將目前新人的課綱存為範本" data-i18n-en="Save Current Hire's Plan as Template">將目前新人的課綱存為範本</span>
+                <i class="fa-solid fa-file-import" aria-hidden="true"></i><span data-i18n-zh="將目前新人的課綱存入此範本" data-i18n-en="Save Current Hire's Plan to Template">將目前新人的課綱存入此範本</span>
               </button>
               <button id="addTplItemBtn" type="button" class="btn btn-xs btn-primary">
                 <i class="fa-solid fa-plus" aria-hidden="true"></i><span data-i18n-zh="新增範本階段" data-i18n-en="Add Template Stage">新增範本階段</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 範本清單切換與新增範本列 -->
+          <div class="flex items-center justify-between gap-2 flex-wrap p-2.5 rounded-box bg-base-200/60 border border-base-300">
+            <div class="flex items-center gap-2 flex-wrap">
+              <label for="tplSetSelect" class="text-xs font-semibold whitespace-nowrap" data-i18n-zh="選擇範本：" data-i18n-en="Template:">選擇範本：</label>
+              <select id="tplSetSelect" class="select select-xs select-bordered min-w-36"></select>
+              <button id="deleteTplSetBtn" type="button" class="btn btn-xs btn-ghost text-error">
+                <i class="fa-regular fa-trash-can" aria-hidden="true"></i><span data-i18n-zh="刪除此範本" data-i18n-en="Delete Template">刪除此範本</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <input id="newTplSetNameInput" type="text" class="input input-bordered input-xs w-40" placeholder="輸入新範本名稱 (如 Exchange)" data-i18n-placeholder-zh="輸入新範本名稱 (如 Exchange)" data-i18n-placeholder-en="New template name (e.g. Exchange)">
+              <button id="createTplSetBtn" type="button" class="btn btn-xs btn-secondary">
+                <i class="fa-solid fa-folder-plus" aria-hidden="true"></i><span data-i18n-zh="新增範本" data-i18n-en="New Template">新增範本</span>
               </button>
             </div>
           </div>
