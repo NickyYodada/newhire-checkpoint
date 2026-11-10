@@ -874,6 +874,9 @@
 
       function renderTemplateModalList() {
         if (!tplTableBody) return;
+        if (saveCurrentAsTplBtn) {
+          saveCurrentAsTplBtn.hidden = !(selectedHireId && hiresMap[selectedHireId] && getHireTasks(selectedHireId).length > 0);
+        }
         tplTableBody.textContent = '';
         var list = getSortedTemplates();
         if (!list.length) {
@@ -967,6 +970,7 @@
 
       if (canWrite) {
         addHireBtn.hidden = false;
+        manageTemplateBtn.hidden = false;
         addTaskBtn.hidden = false;
 
         addHireBtn.addEventListener('click', function () {
